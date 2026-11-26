@@ -20,121 +20,97 @@
 #include "Thingspeak.h"
 #include <EGFormat.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Util/StringUtil.h"
 #include <EGEscape.h>
-#include "EnvSensor/EnvSensor.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Measure/Measure.h"
+#include "Counter/CounterUpload.h"
+#include "Counter/CounterMaths.h"
+#include "App/AppKeys.h"
+#include "App/FeatureBits.h"
+#include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 #include <math.h>
 
-EG_PSTR(K_CHANNEL_KEY, "channel_key");
+CORIUM_PSTR(K_CHANNEL_KEY, "channel_key");
 
 Thingspeak thingspeak;
-EG_REGISTER_MODULE(thingspeak)
+CORIUM_REGISTER_FEATURE(thingspeak, FEAT_THINGSPEAK)
 
-EG_PSTR(M_WARM,  "warm");
-EG_PSTR(M_CPM,   "cpm");
-EG_PSTR(M_CPM5,  "cpm5");
-EG_PSTR(M_CPM15, "cpm15");
-EG_PSTR(M_USV,   "usv");
-
-EG_PSTR(TS_H_EN,  "Upload to ThingSpeak");
-EG_PSTR(TS_L_CK,  "Channel Key");
-EG_PSTR(TS_H_CK,  "ThingSpeak channel write API key");
+CORIUM_PSTR(TS_H_EN,  "Upload to ThingSpeak");
+CORIUM_PSTR(TS_L_CK,  "Channel key");
+CORIUM_PSTR(TS_H_CK,  "ThingSpeak channel write API key");
 
 #define TS_KEY_MAX 16
 
-static const EGPref TS_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SEND,     EG_L_EN, TS_H_EN, "0", nullptr, 0, 0, 0,  EGP_BOOL,   0},
-  {K_CHANNEL_KEY, TS_L_CK, TS_H_CK, "",  nullptr, 0, 0, TS_KEY_MAX, EGP_STRING, EGP_SENSITIVE},
+static const corium::Pref TS_PREF_ITEMS[] PROGMEM = {
+  {EG_K_SEND,     EG_L_EN, TS_H_EN, "0", nullptr, 0, 0, 0,  corium::P_BOOL,   0},
+  {K_CHANNEL_KEY, TS_L_CK, TS_H_CK, "",  nullptr, 0, 0, TS_KEY_MAX, corium::P_STRING, corium::P_SENSITIVE},
 };
 
-static const EGPrefGroup TS_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup TS_PREF_GROUP PROGMEM = {
   "thingspeak", "ThingSpeak", 1,
   TS_PREF_ITEMS,
   sizeof(TS_PREF_ITEMS) / sizeof(TS_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND, 0,
 };
 
-const EGPrefGroup* Thingspeak::prefs_group() { return &TS_PREF_GROUP; }
+const corium::PrefGroup* Thingspeak::prefsGroup() { return &TS_PREF_GROUP; }
 
-void Thingspeak::on_prefs_loaded() {
-  set_enabled(EGPrefs::getBool("thingspeak", EG_K_SEND));
-}
-
-// === LEGACY IMPORT (remove after v1.0.0) ===
-static const EGLegacyAlias TS_LEGACY[] PROGMEM = {
+// legacy import
+static const corium::LegacyAlias TS_LEGACY[] PROGMEM = {
   {"tsSend",       "send"},
   {"tsChannelKey", "channel_key"},
   {},
 };
-EGLegacyRows Thingspeak::legacy_aliases() { return TS_LEGACY; }
-// === END LEGACY IMPORT ===
+corium::LegacyRows Thingspeak::legacyAliases() { return TS_LEGACY; }
 
 Thingspeak::Thingspeak() {
-  pingIntervalMs = (uint32_t)THINGSPEAK_INTERVAL * 1000UL;
+  _every_ms = (uint32_t)THINGSPEAK_INTERVAL * 1000UL;
 }
 
 // entry number, "0" = refused
 bool Thingspeak::interpret(const char* r)
 {
-  bool digits = r[0] != '\0';
-  for (const char* p = r; *p; p++) {
-    if (*p < '0' || *p > '9') digits = false;
-  }
-  if (digits && strcmp_P(r, PSTR("0")) != 0) {
-    Log::debug(PSTR("Thingspeak: Upload OK"));
+  uint64_t entry;
+  if (parseU64(r, &entry) && entry != 0) {
+    corium::Log::debug(PSTR("ThingSpeak: Upload OK"));
     return true;
   }
-  Log::console(PSTR("Thingspeak: Error!"));
+  corium::Log::console(PSTR("ThingSpeak: Refused"));
   return false;
 }
 
+// Adds &fieldN=v, a missing reading is left out
+static size_t add_field(char* url, size_t cap, size_t pos, unsigned field, float v) {
+  if (isnan(v)) return pos;
+  char num[12];
+  format_f(num, sizeof(num), v);
+  int n = snprintf_P(url + pos, cap - pos, PSTR("&field%u=%s"), field, num);
+  return (n > 0 && (size_t)n < cap - pos) ? pos + (size_t)n : pos;
+}
+
 bool Thingspeak::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!egm_b(M_WARM)) return false;
+  const char* raw_key = corium::Prefs::getString("thingspeak", K_CHANNEL_KEY);
+  if (unset(raw_key, TS_L_CK)) return false;
+  if (!upload_ready(logTag())) return false;
 
-  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    Log::console(PSTR("Thingspeak: Testmode"));
-    return false;
-  }
+  corium::Log::debug(PSTR("ThingSpeak: Uploading latest data ..."));
 
-  const char* _ts_channel_key = EGPrefs::getString("thingspeak", K_CHANNEL_KEY);
-  if (_ts_channel_key[0] == '\0') return false;
+  int cpm = CounterMaths::to_int(gcounter.get_cpmf_stable());
+  int cpm5 = CounterMaths::to_int(gcounter.get_cpm5f());
+  int cpm15 = CounterMaths::to_int(gcounter.get_cpm15f());
 
-  Log::debug(PSTR("Thingspeak: Uploading latest data ..."));
-
-  int avgcpm = (int)roundf(egm_f(M_CPM));
-  int avgcpm5 = (int)roundf(egm_f(M_CPM5));
-  int avgcpm15 = (int)roundf(egm_f(M_CPM15));
-
-  char usvChar[20];
-  format_f(usvChar, sizeof(usvChar), egm_f(M_USV), 5);
+  char usv[20];
+  format_f(usv, sizeof(usv), gcounter.get_usv_stable(), 5);
   char key[3 * TS_KEY_MAX + 1];
-  egesc_url(key, sizeof(key), _ts_channel_key);
-  int n0 = snprintf_P(url, cap, TS_URI, key, avgcpm, usvChar, avgcpm5, avgcpm15);
-  if (!url_fits(n0, cap)) return false;
-  size_t up = (size_t)n0;
-  if (envsensor.present()) {
-    char fbuf[12];
-    float et = envsensor.tempC(), eh = envsensor.humidity(), ep = envsensor.pressure();
-    int n;
-    if (!isnan(et)) {
-      format_f(fbuf, sizeof(fbuf), et);
-      n = snprintf_P(url + up, cap - up, PSTR("&field5=%s"), fbuf);
-      if (n > 0 && (size_t)n < cap - up) up += n;
-    }
-    if (!isnan(eh)) {
-      format_f(fbuf, sizeof(fbuf), eh);
-      n = snprintf_P(url + up, cap - up, PSTR("&field6=%s"), fbuf);
-      if (n > 0 && (size_t)n < cap - up) up += n;
-    }
-    if (!isnan(ep)) {
-      format_f(fbuf, sizeof(fbuf), ep);
-      n = snprintf_P(url + up, cap - up, PSTR("&field7=%s"), fbuf);
-      if (n > 0 && (size_t)n < cap - up) up += n;
-    }
-  }
-
+  egesc_url(key, sizeof(key), raw_key);
+  int n0 = snprintf_P(url, cap, TS_URI, key, cpm, usv, cpm5, cpm15);
+  if (!urlFits(n0, cap)) return false;
+  size_t pos = (size_t)n0;
+  pos = add_field(url, cap, pos, 5, corium::m_f(M_T));
+  pos = add_field(url, cap, pos, 6, corium::m_f(M_H));
+  pos = add_field(url, cap, pos, 7, corium::m_f(M_P));
   return true;
 }
 #endif

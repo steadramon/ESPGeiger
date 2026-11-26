@@ -1,5 +1,5 @@
 /*
-  IgmpRefresh.cpp - see header.
+  IgmpRefresh.cpp - fresh IGMP reports
 
   Copyright (C) 2026 @steadramon
 
@@ -26,10 +26,10 @@
 #include <lwip/igmp.h>
 #include <lwip/tcpip.h>
 
+namespace corium {
 namespace IgmpRefresh {
 
-// Must run on the tcpip thread: igmp_report_groups mutates
-// netif->igmp_group_list which the lwIP worker also touches.
+// Must run on the tcpip thread, igmp_group_list is shared with lwIP
 static void report_groups_cb(void* ctx) {
   igmp_report_groups((struct netif*)ctx);
 }
@@ -45,9 +45,31 @@ bool refresh() {
 }
 
 }
+}  // namespace corium
 
-#else  // ESP8266 or other targets - bug doesn't manifest here.
+#else  // not needed off esp32
 
+namespace corium {
 namespace IgmpRefresh { bool refresh() { return false; } }
+}  // namespace corium
 
+#endif
+
+#ifdef ESP8266
+#include "Wifi.h"
+#include <lwip/igmp.h>
+
+namespace corium {
+namespace IgmpRefresh {
+
+bool join(const IPAddress& group) {
+  return igmp_joingroup(Wifi::local_ip, group) == ERR_OK;
+}
+
+void leave(const IPAddress& group) {
+  (void)igmp_leavegroup(Wifi::local_ip, group);
+}
+
+}
+}  // namespace corium
 #endif

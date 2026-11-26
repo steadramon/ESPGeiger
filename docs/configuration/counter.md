@@ -16,13 +16,13 @@ Debounce is an input filter in the firmware. It drops any pulse that arrives wit
 
 The job of debounce is to reject electrical artifacts: tube ringing, capacitive pickup, amplifier overshoot. These are not real radiation events and should not be counted.
 
-Debounce applies to interrupt-counting builds. ESP32 PCNT builds use the [PCNT Filter](/hardware/esphardware#pcnt-filter) instead.
+Debounce applies when counting by interrupt. ESP32 builds counting with PCNT use the [PCNT filter](/hardware/esphardware#pcnt-filter) instead.
 
 <!-- gen:prefs counter only=debounce -->
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Debounce | `counter.debounce` | Int 0-10000 | `200` | pulse builds without PCNT | Debounce window in microseconds. |
+| Debounce (us) | `counter.debounce` | Int 0-10000 | `200` | pulse builds (interrupt counting) | Debounce window in microseconds. |
 
 <!-- /gen -->
 
@@ -34,13 +34,13 @@ If you suspect real pulses are being dropped at high rates (you flash a hot sour
 
 Tube dead time is a physical property of the GM tube itself. After each ionisation event the tube needs to recover before it can fire again. During that window real radiation events are missed by the tube hardware, not by the firmware.
 
-ESPGeiger applies a statistical upward correction to the displayed CPS to compensate for what the tube missed. The correction kicks in only above 50 CPS (3000 CPM); at typical background rates it has no observable effect.
+ESPGeiger applies a statistical upward correction to the displayed CPS to compensate for what the tube missed. The correction is applied at all rates (a no-divide approximation below 50 CPS); at typical background rates it is too small to see.
 
 <!-- gen:prefs counter only=dead_time_us -->
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Tube dead time | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | Tube dead time in microseconds. `0` disables the correction. |
+| Tube dead time (us) | `counter.dead_time_us` | Int 0-1000 | `100` (`0` on test builds) | pulse builds | Tube dead time in microseconds. `0` disables the correction. |
 
 <!-- /gen -->
 
@@ -59,14 +59,14 @@ Setting `0` disables the correction entirely.
 
 ## When debounce and dead time interact
 
-Debounce is a filter (drops pulses in the firmware), dead time is a correction (statistical adjustment to the displayed rate). They are not the same thing and should not be merged.
+Debounce is a filter (drops pulses in the firmware), dead time is a correction (statistical adjustment to the displayed rate). They are not the same thing.
 
 The recommended rule of thumb:
 
 * Set dead time from the tube datasheet. This is fixed physics.
 * Set debounce as low as your front end allows without false counts. This depends on your hardware.
 
-A reasonable setup has `debounce <= dead_time + a small margin`. If your debounce is much larger than your dead time, you are filtering pulses the tube did produce and the dead time correction will not recover them because it assumes the only thing lost was tube recovery.
+A reasonable setup has `debounce <= dead_time + a small margin`. Counting by interrupt, nothing is counted inside the debounce either, so the correction uses whichever of the two is longer (a dead time of `0` still turns it off). If your debounce is much larger than your dead time, you are filtering pulses the tube did produce: the correction estimates them back, it doesn't count them, so a high rate reads noisier.
 
 If you need a large debounce to reject hardware noise, that is a sign the front end could be improved (better shielding, lower impedance, an output buffer on the tube amplifier).
 

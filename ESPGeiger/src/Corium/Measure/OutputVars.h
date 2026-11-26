@@ -16,21 +16,23 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef OUTPUTVARS_H
-#define OUTPUTVARS_H
+#ifndef CORIUM_OUTPUTVARS_H
+#define CORIUM_OUTPUTVARS_H
 
 #include <stdint.h>
 #include <stddef.h>
-#include "EGMeasure.h"
+#include "Measure.h"
 
+namespace corium {
 namespace OutputVars {
 
-// key not NUL-terminated, may carry :spec. 0 = unknown or bad spec
-size_t render(const char* key, size_t keylen, char* buf, size_t cap);
+// key isn't NUL terminated and may end in :spec
+size_t render(const char* key, size_t klen, char* buf, size_t cap, bool* cut = nullptr);
 
-// {name} {name:F1} \n \r \t \\ \{ \}, unknown left as written. tpl in SRAM
+// Fills in {name} {name:F1} and the escapes \n \r \t \\ \{ \}, anything unknown is left as written. tpl in SRAM
 size_t renderTemplate(const char* tpl, char* buf, size_t cap);
 
 }  // namespace OutputVars
+}  // namespace corium
 
 #endif

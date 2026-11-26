@@ -1,5 +1,5 @@
 /*
-  I2CBus.cpp - one Wire.begin, shared by the OLED and env sensors
+  I2CBus.cpp - one Wire.begin, shared by the modules
 
   Copyright (C) 2026 @steadramon
 
@@ -16,50 +16,48 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#if defined(SSD1306_DISPLAY) || !defined(DISABLE_ENVSENSOR)
+#include "App/AppConfig.h"
+#ifdef I2C_BUS
 
 #include "I2CBus.h"
 #include <Wire.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
-#include "Globals.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "PinSafety.h"
 
 // boards with fixed pins have no prefs
-#ifndef OLED_PINS_BLOCKED
-// one bus for the OLED and env sensors
-class I2CPrefs : public EGModule {
+#ifndef I2C_PINS_FIXED
+// one bus for the modules
+class I2CPrefs : public corium::Module {
 public:
   const char* name() override { return PSTR("i2c"); }
-  bool core_module() override { return true; }   // a bad pin is fixed from safe mode
-  uint8_t display_order() override { return 16; }
-  const EGPrefGroup* prefs_group() override;
+  bool coreModule() override { return true; }   // a bad pin is fixed from safe mode
+  uint8_t displayOrder() override { return 16; }
+  const corium::PrefGroup* prefsGroup() override;
 };
 
 static I2CPrefs i2cprefs;
-EG_REGISTER_MODULE(i2cprefs)
+CORIUM_REGISTER_MODULE(i2cprefs)
 
-#define I2C_STR_(x) #x
-#define I2C_STR(x) I2C_STR_(x)
 
-EG_PSTR(I2_L_SDA, "SDA Pin");
-EG_PSTR(I2_L_SCL, "SCL Pin");
+CORIUM_PSTR(I2_L_SDA, "SDA pin");
+CORIUM_PSTR(I2_L_SCL, "SCL pin");
 
-static const EGPref I2C_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SDA, I2_L_SDA, EG_H_RBA, I2C_STR(I2C_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN_OUT},
-  {EG_K_SCL, I2_L_SCL, EG_H_RBA, I2C_STR(I2C_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_REBOOT | EGP_PIN_OUT},
+static const corium::Pref I2C_PREF_ITEMS[] PROGMEM = {
+  {corium::K_SDA, I2_L_SDA, nullptr, STR(I2C_DEFAULT_SDA), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_OD},
+  {corium::K_SCL, I2_L_SCL, nullptr, STR(I2C_DEFAULT_SCL), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_REBOOT | corium::P_PIN_OUT | corium::P_PIN_OD},
 };
 
-static const EGPrefGroup I2C_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup I2C_PREF_GROUP PROGMEM = {
   "i2c", "I2C Bus", 1,
   I2C_PREF_ITEMS,
   sizeof(I2C_PREF_ITEMS) / sizeof(I2C_PREF_ITEMS[0]),
-  EGP_CAT_SYSTEM, nullptr,
+  corium::P_CAT_SYSTEM, nullptr, 0,
 };
 
-const EGPrefGroup* I2CPrefs::prefs_group() { return &I2C_PREF_GROUP; }
+const corium::PrefGroup* I2CPrefs::prefsGroup() { return &I2C_PREF_GROUP; }
 #endif
 
 static const uint8_t NO_PIN = 255;
@@ -68,21 +66,24 @@ static uint8_t s_sda = NO_PIN;
 static uint8_t s_scl = NO_PIN;
 static bool s_up = false;
 
-void I2CBus::pins(uint8_t sda, uint8_t scl) {
+void corium::I2CBus::pins(uint8_t sda, uint8_t scl) {
   s_sda = sda;
   s_scl = scl;
 }
 
-bool I2CBus::begin() {
+bool corium::I2CBus::begin() {
   if (s_up) return true;
   if (s_sda == NO_PIN || s_scl == NO_PIN) return false;
-  const char* why = PinSafety::claim_output(s_sda, PinSafety::I2C);
-  if (!why) why = PinSafety::claim_output(s_scl, PinSafety::I2C);
+  const char* why = corium::PinSafety::claimOutput(s_sda, corium::PinSafety::I2C);
+  if (!why) why = corium::PinSafety::claimOutput(s_scl, corium::PinSafety::I2C);
   if (why) {
-    Log::console(PSTR("I2C: pins %u/%u unsafe (%s)"), s_sda, s_scl, why);
+    corium::Log::console(PSTR("I2C: Pins %u/%u unsafe (%s)"), s_sda, s_scl, why);
     return false;
   }
   Wire.begin(s_sda, s_scl);
+#ifdef ESP8266
+  Wire.setClockStretchLimit(CORIUM_I2C_STRETCH_US);
+#endif
   s_up = true;
   return true;
 }

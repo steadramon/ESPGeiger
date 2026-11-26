@@ -1,0 +1,125 @@
+/*
+  Reactor.h - the main loop. Hot work runs every pass, the rest once a ms.
+
+  Copyright (C) 2026 @steadramon
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+#ifndef CORIUM_REACTOR_H
+#define CORIUM_REACTOR_H
+
+#include <Arduino.h>
+#include <EGTcp.h>
+#ifdef ESP32
+#include "esp_task_wdt.h"
+#endif
+#include "Corium/System/FastMillis.h"
+#include "Corium/System/Lifecycle.h"
+#include "Corium/System/TickProfile.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Output/LedSignal.h"
+#include "Corium/WebPortal/WebPortal.h"
+
+namespace corium {
+// hot(now) runs every pass, second() once a second
+namespace Reactor {
+
+#ifdef ESP32
+  // The ms the next second() is due on
+  extern uint32_t s_next_sec;
+#endif
+  extern uint32_t s_ms_last_us;
+  extern uint32_t s_ms_acc_us;
+  extern uint32_t s_next_house;
+
+  // Call before wifi, the libs take their time from it
+  void clock(void (*ms)());
+
+  // Runs from an os_timer (SYS) on 8266 and the esp_timer task on esp32, so no log or yield in here
+  template <void (*extra)(uint32_t)>
+  void ms() {
+    uint32_t now_us = micros();
+    s_ms_acc_us += (now_us - s_ms_last_us);
+    while (s_ms_acc_us >= 1000) {
+      _fast_ms_counter++;
+      s_ms_acc_us -= 1000;
+    }
+    s_ms_last_us = now_us;
+    if (LedSignal::due()) LedSignal::poll();
+    extra(now_us);
+  }
+
+  // Called at the end of setup. second() then runs from an os_timer (SYS) on 8266, from the loop on esp32
+  void begin(void (*app)(uint32_t up));
+  void second();
+  // runs from the loop, half a second apart from second()
+  void house();
+
+  template <void (*hot)(unsigned long)>
+  inline void pass(WebPortal& portal) {
+#ifdef LOOP_PROFILE
+    uint32_t t0 = micros();
+#endif
+    TickProfile::countIter();
+    unsigned long now = fastMillis();
+    hot(now);
+    // once a ms is plenty
+    static unsigned long s_ms;
+    if (now != s_ms) {
+      s_ms = now;
+#ifdef ESP32
+      // At most one a ms. After a stall second() runs once and skips the missed ones
+      if (reached(now, s_next_sec)) {
+        s_next_sec += 1000;
+        second();
+        esp_task_wdt_reset();
+#if CONFIG_FREERTOS_UNICORE
+        // single core (c3), give the idle task a turn
+        vTaskDelay(1);
+#endif
+      }
+#endif
+      if (reached(now, s_next_house)) {
+        s_next_house += 1000;
+        if (reached(now, s_next_house)) s_next_house = now + 1000;   // after a stall it only runs once
+        house();
+      }
+      // TCP callbacks, OTA needs these too
+      Registry::in(Registry::IN_TCP);
+      EGTcp::poll();
+      Registry::in(Registry::IN_PORTAL);
+      // Web OTA needs this too
+      if (reached(now, portal.nextPollDue())) portal.poll(now);
+      Registry::in(Registry::IN_NONE);
+      if (Registry::due(now)) Registry::loopAll(now);
+    }
+#ifdef LOOP_PROFILE
+    TickProfile::addLoopBody((uint32_t)(micros() - t0));
+#endif
+  }
+
+  // On 8266 the core runs preloop_update_frequency() every pass, the app throttles it
+  template <void (*hot)(unsigned long)>
+  inline void run(WebPortal& portal) {
+#ifdef ESP32
+    for (;;) pass<hot>(portal);
+#else
+    pass<hot>(portal);
+#endif
+  }
+
+}
+}  // namespace corium
+
+#endif

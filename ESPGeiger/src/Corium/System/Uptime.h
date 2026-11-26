@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPGEIGER_UPTIME_H
-#define ESPGEIGER_UPTIME_H
+#ifndef CORIUM_UPTIME_H
+#define CORIUM_UPTIME_H
 
 #include <Arduino.h>
 #include <time.h>
@@ -30,19 +30,28 @@ constexpr time_t SECS_PER_HOUR = 3600UL;
 constexpr time_t SECS_PER_DAY  = SECS_PER_HOUR * 24UL;
 #endif
 
-// tick() from the 1 Hz ticker only
+namespace corium {
+// Call tick() from the 1 Hz ticker only
 namespace Uptime {
   extern UptimeCounter counter;
+  extern long start;   // set at Reactor::begin, +1
   inline time_t seconds() { return counter.value(); }
   inline time_t tick() { return counter.tick((uint32_t)::millis()); }
 
+  // Seconds since from, 0 before it
+  inline uint32_t since(long from) {
+    uint32_t up = counter.value();
+    return (long)up > from ? up - from : 0;
+  }
+
   struct Split { uint16_t d; uint8_t h, m, s; };
-  // 32 bit maths, time_t is 64 on some cores
+  // 32 bit maths, time_t is 64 bit on some cores
   inline Split split(uint32_t t) {
     const uint32_t day = SECS_PER_DAY, hour = SECS_PER_HOUR, min = SECS_PER_MIN;
     return { (uint16_t)(t / day), (uint8_t)(t % day / hour),
              (uint8_t)(t % hour / min), (uint8_t)(t % min) };
   }
 }
+}  // namespace corium
 
 #endif

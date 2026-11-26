@@ -17,36 +17,60 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef LOGGER_H
-#define LOGGER_H
+#ifndef CORIUM_LOGGER_H
+#define CORIUM_LOGGER_H
 
 #include "Arduino.h"
+#include "App/AppConfig.h"
 
+// Web log buffer in bytes, oldest lines drop out
+#ifndef MAX_LOG_SIZE
 #define MAX_LOG_SIZE 4000
-#define LOG_LEVEL    LOG_LEVEL_ERROR
+#endif
+// 0 console, 1 error, 2 info, 3 debug. info/debug compile out when LOG_LEVEL is below them
+#ifndef LOG_LEVEL
+#define LOG_LEVEL    1
+#endif
 
+namespace corium {
 class Log {
 public:
   enum LoggingLevels {LOG_LEVEL_CONSOLE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG};
-  static void console(const char* logData, ...);
-  static void error(const char* logData, ...);
-  static void info(const char* logData, ...);
-  static void debug(const char* logData, ...);
-  static void banner(const char* logData, ...);  // raw serial, no timestamp
-  // line idx ending '\1', at most cap-1 bytes; 0 if gone
+  // fmt in flash or SRAM
+  static void console(const char* fmt, ...);
+  static void vconsole(const char* fmt, va_list ap) { vlog(LOG_LEVEL_CONSOLE, true, fmt, ap); }   // for a lib's log hook
+#if LOG_LEVEL >= 2
+  static void info(const char* fmt, ...);
+#else
+  template <class... A> static void info(const char*, A...) {}
+#endif
+#if LOG_LEVEL >= 3
+  static void debug(const char* fmt, ...);
+#else
+  template <class... A> static void debug(const char*, A...) {}
+#endif
+  static void banner(const char* fmt, ...);  // Raw serial, no timestamp
+  // Copies line idx with its '\1' end, at most cap-1 bytes. 0 if it's gone
   static size_t copyLog(uint32_t idx, char* out, size_t cap);
-  static char getLogIdx();
-  static void setSerialLogLevel(bool level);
-  static bool serialOn() { return serialLog; }
+  // copies whole lines idx..end-1, idx 0 = all, over 255 = none
+  static size_t copySince(uint32_t* idx, uint8_t end, char* out, size_t cap);
+  static char getLogIdx();   // idx the next line gets, 1..255
+  static void setSerialOn(bool on);
+  // For the 8266 tick in SYS context. Lines only go to the ring, serial prints them later
+  static void hold(bool on);
+  static void flush();   // Called from the console's loop
+  static void (*wake)();   // Set by the console, posts to its loop
+  static bool serialOn() { return _serial; }
 
 private:
-  static void vlog(LoggingLevels level, bool withTimestamp, const char* formatP, va_list arg);
-  static void AddLog(LoggingLevels logLevel, const char* logData, bool withTimestamp = true);
+  static void vlog(LoggingLevels level, bool timed, const char* fmt, va_list arg);
+  static void AddLog(LoggingLevels level, const char* line, bool timed = true);
   static size_t strchrspn(const char *str1, int character);
-  static char log[MAX_LOG_SIZE];
-  static char logIdx;
-  static LoggingLevels logLevel;
-  static bool serialLog;
+  static char _log[MAX_LOG_SIZE];
+  static char _idx;
+  static LoggingLevels _level;
+  static bool _serial;
 };
+}  // namespace corium
 
 #endif

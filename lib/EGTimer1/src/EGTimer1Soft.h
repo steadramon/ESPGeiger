@@ -18,7 +18,7 @@
 */
 
 // analogWrite and tone() pins, never spun for, can be a few us late
-// times CCOUNT, lengths cpu cycles unless named ticks
+// Times are CCOUNT, lengths cpu cycles unless named ticks
 
 #ifndef EG_TIMER1_SOFT_H
 #define EG_TIMER1_SOFT_H
@@ -28,6 +28,7 @@
 #define EGT1_SOFT_MAX   4
 #define EGT1_MAX_TICKS  0x7FFFFFu   // 23 bit register
 #define EGT1_LEAD_TICKS 160         // 2 us, the NMI must return first
+#define EGT1_MAX_SPAN   0x7FFFFFFFu // cycles, longer reads as past
 
 struct EGT1Soft {
   uint32_t mask;     // 0 = free
@@ -59,23 +60,24 @@ __attribute__((always_inline)) inline uint32_t egt1_apply(EGT1Soft* ch, uint8_t 
     if (ch[i].mask == c.mask) slot = &ch[i];
     else if (!ch[i].mask && !spare) spare = &ch[i];
   }
-  uint32_t expiry = c.run ? ((now + c.run) | 1u) : 0;
+  uint32_t expiry = c.run ? ((now + c.run) | 1u) : 0;   // | 1 keeps 0 = never
   c.ok = 1;
   if (c.op == EGT1_CMD_STOP) {
     if (slot) slot->mask = 0;
-  } else if (slot) {
-    slot->high = c.high;
-    slot->low = c.low;
-    slot->expiry = expiry;
-  } else if (spare) {
-    spare->mask = c.mask;
-    spare->high = c.high;
-    spare->low = c.low;
-    spare->next = now;
-    spare->expiry = expiry;
-    spare->level = 0;
   } else {
-    c.ok = 0;
+    if (!slot && spare) {
+      slot = spare;
+      slot->mask = c.mask;
+      slot->next = now;
+      slot->level = 0;
+    }
+    if (slot) {
+      slot->high = c.high;
+      slot->low = c.low;
+      slot->expiry = expiry;
+    } else {
+      c.ok = 0;
+    }
   }
   c.op = EGT1_CMD_NONE;
   uint32_t carried = 0;
@@ -83,6 +85,7 @@ __attribute__((always_inline)) inline uint32_t egt1_apply(EGT1Soft* ch, uint8_t 
   return carried;
 }
 
+// One edge if due, true if pin bits were added to set/clr
 __attribute__((always_inline)) inline bool egt1_soft_edge(EGT1Soft& c, uint32_t now,
                                                            uint32_t* set, uint32_t* clr) {
   if (!c.mask || (int32_t)(c.next - now) > 0) return false;
@@ -100,10 +103,12 @@ __attribute__((always_inline)) inline bool egt1_soft_edge(EGT1Soft& c, uint32_t 
     c.level = 1;
     c.next += c.high;
   }
+  // fell a whole phase behind, restart from now
   if ((int32_t)(now - c.next) >= 0) c.next = now + (c.level ? c.high : c.low);
   return true;
 }
 
+// Earliest next edge, false if none are on
 __attribute__((always_inline)) inline bool egt1_soft_next(const EGT1Soft* ch, uint8_t n,
                                                            uint32_t now, uint32_t* when) {
   bool any = false;
@@ -120,6 +125,7 @@ __attribute__((always_inline)) inline bool egt1_soft_next(const EGT1Soft* ch, ui
 
 enum : uint8_t { EGT1_STEP_EDGE = 1, EGT1_STEP_RUNS = 2, EGT1_STEP_FREED = 4 };
 
+// every due edge, then the earliest next; flags above
 __attribute__((always_inline)) inline uint8_t egt1_soft_step(EGT1Soft* ch, uint8_t n,
                                                               uint32_t now, uint32_t* set,
                                                               uint32_t* clr, uint32_t* when) {
@@ -143,7 +149,7 @@ __attribute__((always_inline)) inline uint8_t egt1_soft_step(EGT1Soft* ch, uint8
   return f;
 }
 
-// 0 = nothing on
+// ticks to the next wake, clamped to the register, 0 = nothing on
 __attribute__((always_inline)) inline uint32_t egt1_arm(bool pwm_on, uint32_t pwm_at,
                                                          bool soft_on, uint32_t soft_at,
                                                          uint32_t now, uint8_t x2) {

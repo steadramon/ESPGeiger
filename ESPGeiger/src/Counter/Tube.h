@@ -22,10 +22,16 @@
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
 
+// counter.tube, 0 = other. Append only, the number is saved
+extern const char TUBE_OPTS[];
+
 namespace Tube {
   const char* model();
   void set_model(const char* s);   // s may be in flash
   uint8_t detection();   // bits: alpha beta gamma
+
+  static const uint8_t COUNT = 12;   // in TUBE_OPTS
+  uint8_t id();
 }
 
 #endif

@@ -21,8 +21,9 @@
 #ifdef AUDIO_TICK
 
 #include <Arduino.h>
+#include <atomic>
 #include <driver/i2s.h>
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 
 
 #ifndef AUDIO_TICK_BCLK
@@ -44,7 +45,12 @@
 #endif
 #endif
 
+// Hz, 16 bit mono
 #define AUDIO_TICK_SAMPLE_RATE 22050
+
+constexpr uint32_t ms_to_samples(uint32_t ms) {
+  return ms * AUDIO_TICK_SAMPLE_RATE / 1000;
+}
 
 // one worker task owns I2S
 enum AudioCmdType : uint8_t {
@@ -55,6 +61,8 @@ enum AudioCmdType : uint8_t {
   AC_NUMBERS,
   AC_CHIME,
   AC_CLICK,
+  AC_DIGIT,
+  AC_SILENCE,
 };
 
 struct AudioCmd {
@@ -62,38 +70,47 @@ struct AudioCmd {
   uint8_t i1;
   int32_t i32;
   const char* word;   // static, vocab name
+  bool web;           // from a web route, only one queued at a time
 };
 
+// Safe from any task
 bool audio_enqueue(const AudioCmd& cmd);
+extern const char AT_QUEUED[];   // the routes' replies, PROGMEM
+extern const char AT_QFULL[];
+void audio_silence(uint16_t ms);
+// Speech commands are handed to this, on the worker task
+typedef void (*AudioFn)(const AudioCmd& cmd);
+void audio_speech(AudioFn fn);
 
-class AudioTick : public EGModule {
+class AudioTick : public corium::Module {
   public:
     AudioTick() {}
     const char* name() override { return PSTR("tick"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint8_t display_order() override { return 17; }
-    uint16_t warmup_seconds() override { return 0; }
-    bool has_loop() override { return false; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
+    uint8_t displayOrder() override { return 17; }
+    void loop(unsigned long now) override;
     void begin() override;
-    const EGPrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
     void registerRoutes(EGHttpServer& http) override;
 
     void notifyClick(unsigned long now_ms);
 
-    // ticks dropped while owned
+    // Clicks are dropped while something else owns I2S
     static void setI2SOwned(bool owned);
     bool        isI2SUp() const { return _i2s_up; }
     void        dispatch(const struct AudioCmd& cmd);
     static void numbersPad(uint8_t* out, size_t n);
 
-    bool muted() const { return _muted; }
-    void toggleMute();
+    bool muted() const { return _muted.load(std::memory_order_relaxed); }
+    // Runs on the timer task, loop() gets posted to log it
+    void toggleMute() { _muted.store(!muted(), std::memory_order_relaxed); }
 
   private:
-    void playClick(uint8_t engine_override = 255);
+    void playClick(uint8_t engine = 255);
     void playClickPool();
     void playClickChirp();
+    void synthClick(float asym, float f2_amp, float amp, float tau, float f_lo, uint32_t nr);
     void playBootChime();
     void play_chime_now(uint8_t c);
     void chimeThreeBeeps();
@@ -103,7 +120,7 @@ class AudioTick : public EGModule {
     void chimeMarioCoin();
     void chimeSputnik();
     void chimeItemGet();
-    void chimeMorseCallsign();    // chime 9
+    void chimeMorseCallsign();
     void chimeNumbersStation();
     void playMelodyNote(uint16_t freq_hz, uint16_t ms, bool square = false,
                         uint16_t gap_ms = 30);
@@ -119,10 +136,10 @@ class AudioTick : public EGModule {
     uint8_t       _bclk     = AUDIO_TICK_BCLK;
     uint8_t       _ws       = AUDIO_TICK_WS;
     uint8_t       _dout     = AUDIO_TICK_DOUT;
-    unsigned long _last_emit_ms = 0;
     uint8_t       _tokens = 5;
-    unsigned long _last_token_ms = 0;
-    bool          _muted = false;
+    uint32_t      _last_token_ms = 0;
+    std::atomic<bool> _muted{false};
+    bool          _muted_logged = false;
 };
 
 extern AudioTick audiotick;

@@ -1,5 +1,5 @@
 /*
-  Fnv.h - FNV-1a, station slots are hashed with it so it never changes
+  Fnv.h - FNV-1a, send slots are hashed with it so it never changes
 
   Copyright (C) 2026 @steadramon
 
@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef FNV_H
-#define FNV_H
+#ifndef CORIUM_FNV_H
+#define CORIUM_FNV_H
 
 #include <Arduino.h>
 

@@ -21,6 +21,7 @@
 
 #include <stddef.h>
 
+// points into the url, query keeps its '?'
 struct EGUrlParts {
   const char* host;
   size_t      host_len;
@@ -31,6 +32,12 @@ struct EGUrlParts {
   int         port;
 };
 
-bool eg_parse_url(const char* url, EGUrlParts* out);
+// why a url was refused
+enum EGUrlErr : unsigned char {
+  EGURL_OK, EGURL_SCHEME, EGURL_HOST, EGURL_USERINFO, EGURL_IPV6, EGURL_PORT, EGURL_CHARS
+};
+
+// http only, port 80 if none, path "/" if none; why may be null
+bool eg_parse_url(const char* url, EGUrlParts* out, EGUrlErr* why = nullptr);
 
 #endif

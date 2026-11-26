@@ -20,11 +20,19 @@
 #define EG_DISPLAY_H
 #ifdef SSD1306_DISPLAY
 #include <stdint.h>
+#include <math.h>
 #include "Corium/Platform/Flash.h"
 #include "DisplayBackend.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Measure/Measure.h"
+#include "Counter/CounterMeasures.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
+#include "App/Topics.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
+#include "Corium/System/FastMillis.h"
 
-// under 10 the 5 min avg, unless 3 sigma off
+// Under 10 cpm show the 5 min avg, unless the two are over 3 sigma apart
 inline bool use_cpm5(float cpm, float cpm5) {
   if (cpm >= 10.0f || cpm5 >= 10.0f) return false;
   float d = cpm - cpm5;
@@ -35,7 +43,7 @@ inline float display_cpm(float cpm, float cpm5) {
   return use_cpm5(cpm, cpm5) ? cpm5 : cpm;
 }
 
-// tenths, as the number was
+// Turns the history into tenths, the same way the number was picked
 inline void display_hist_was(int* h, int n, const uint16_t* c5, int m) {
   for (int i = 0; i < n; i++) {
     int j = i - (n - m);
@@ -44,32 +52,23 @@ inline void display_hist_was(int* h, int n, const uint16_t* c5, int m) {
   }
 }
 
-// k 10 = tenths
-inline void display_hist(int* h, int n, float cpm5, int k) {
-  bool low = cpm5 < 10.0f;
-  if (!low && k == 1) return;
-  int c5k = (int)(cpm5 * k + 0.5f);
-  for (int i = 0; i < n; i++) {
-    if (low && h[i] < 10 && use_cpm5((float)h[i], cpm5)) h[i] = c5k;
-    else                                              h[i] *= k;
-  }
-}
-
-class Display : public EGModule {
+class Display : public corium::Module {
   public:
     const char* name() override { return PSTR("disp"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint16_t warmup_seconds() override { return 0; }
-    uint8_t display_order() override { return 17; }
-    bool hw_present() override { return backend()->present(); }
-    const EGPrefGroup* prefs_group() override;
-    const EGPrefShow* prefs_show() override;
-    EGLegacyRows legacy_aliases() override;
-    void on_prefs_loaded() override;
-    void on_prefs_saved() override;
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
+    uint8_t displayOrder() override { return 17; }
+    bool hwPresent() override { return backend()->present(); }
+    const corium::PrefGroup* prefsGroup() override;
+    const corium::PrefShow* prefsShow() override;
+    corium::LegacyRows legacyAliases() override;
+    void onPrefsLoaded() override;
+    void onPrefsSaved() override;
     void registerRoutes(EGHttpServer& http) override;
 
     DisplayBackend* backend();   // never null
+    // Each backend adds itself from its own file at static init
+    static constexpr uint8_t BACKENDS_MAX = 2;
+    static bool add(DisplayBackend* b);
 
     void button(unsigned long now, int8_t dir);
     void setup_wifi(const char* host) { backend()->setup_wifi(host); }
@@ -77,22 +76,95 @@ class Display : public EGModule {
     bool toggle_auto_off(unsigned long now);
     void offline()                    { backend()->offline(); }
     void wipe(int seconds)            { backend()->wipe(seconds); }
+    void presses(unsigned long now);
+#else
+    void presses(unsigned long) {}
 #endif
     void keep_on()                    { _auto_off = false; }
-    void wake(unsigned long now)      { _woken = now; }
+    void wake(unsigned long now) {
+      _woke.mark(now);
+      if (!_lit) refresh(now);
+    }
 
     enum Sleep : uint8_t { AWAKE, TIMED_OUT, OFF_HOURS };
     Sleep sleep(unsigned long now);
+    // Runs on new counts, presses, taps and wakes
+    void loop(unsigned long now) override {
+      presses(now);
+      refresh(now);
+    }
+    // Posted from loop() when the display goes lit or dark
+    static constexpr uint8_t TOPIC_POWER = Topic::POWER;
+    bool lit() const { return _lit; }
+
+    // Core rows, looked up at the first prefs load
+    float cpm()       { return corium::m_read_f(_cpm); }
+    float cpm5()      { return corium::m_read_f(_cpm5); }
+    float cpm15()     { return corium::m_read_f(_cpm15); }
+    float cps()       { return corium::m_read_f(_cps); }
+    float usv()       { return corium::m_read_f(_usv); }
+    float ratio()     { return corium::m_read_f(_ratio); }
+    bool  warm()      { return corium::m_read_b(_warm); }
+    bool  no_counts() { return corium::m_read_b(_none); }
+    bool  alert()     { return corium::m_read_b(_alert); }
+    bool  warn()      { return corium::m_read_b(_warn); }
+    uint32_t blip() {
+      corium::MValue v;
+      return (_blip && _blip(&v)) ? v.u : 0;
+    }
+    // swaps in the 5 min avg under 10 cpm
+    float shown_cpm() {
+      float c = cpm();
+      return c < 10.0f ? display_cpm(c, cpm5()) : c;
+    }
+    // A graph that dips under 10 is drawn in tenths, tenths() returns 10 when it is
+    static const uint8_t HIST_MAX = 64;
+    int tenths(int* h, uint16_t n) {
+      int lo = n ? h[0] : 10;
+      for (uint16_t i = 1; i < n; i++) if (h[i] < lo) lo = h[i];
+      if (lo >= 10 || n > HIST_MAX) return 1;
+      uint16_t c5[HIST_MAX];
+      int m = cpm5() < 10.0f && warm() ? (int)egm_cpm5_history(c5, n) : 0;
+      display_hist_was(h, n, c5, m);
+      return 10;
+    }
 
   private:
+    void refresh(unsigned long now) {
+      bool lit = sleep(now) == AWAKE;
+      if (lit == _lit) return;
+      _lit = lit;
+      corium::Registry::emit(TOPIC_POWER);
+    }
+    bool _lit = true;
+    uint8_t _taps = 0;
+    unsigned long _tap_ms = 0;
+    void find_rows() {
+      _cpm   = corium::m_core_read(K_M_CPM,           corium::M_F32);
+      _cpm5  = corium::m_core_read(K_M_CPM5,          corium::M_F32);
+      _cpm15 = corium::m_core_read(K_M_CPM15,         corium::M_F32);
+      _cps   = corium::m_core_read(K_M_CPS,           corium::M_F32);
+      _usv   = corium::m_core_read(K_M_USV,           corium::M_F32);
+      _ratio = corium::m_core_read(PSTR("ratio"),     corium::M_F32);
+      _warm  = corium::m_core_read(PSTR("warm"),      corium::M_BOOL);
+      _none  = corium::m_core_read(PSTR("no_counts"), corium::M_BOOL);
+      _alert = corium::m_core_read(EG_K_ALERT,        corium::M_BOOL);
+      _warn  = corium::m_core_read(EG_K_WARN,         corium::M_BOOL);
+      _blip  = corium::m_core_read(PSTR("blip"),      corium::M_U32);
+    }
+    corium::MRead _cpm = nullptr, _cpm5 = nullptr, _cpm15 = nullptr, _cps = nullptr, _usv = nullptr;
+    corium::MRead _ratio = nullptr, _warm = nullptr, _none = nullptr, _alert = nullptr, _blip = nullptr;
+    corium::MRead _warn = nullptr;
+
     bool on_hours();
     bool _started = false;
     bool _auto_off = true;
-    unsigned long _woken = 0;
+    corium::Stamp _woke;
     uint32_t _timeout_ms = 0;   // 0 = use on/off hours
 };
 
 extern Display display;
+
 
 #endif
 #endif

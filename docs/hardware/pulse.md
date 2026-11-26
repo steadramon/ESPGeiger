@@ -27,3 +27,43 @@ ESPGeiger supports pulse-based Geiger counters that send an I/O pulse for each d
 [Yaorea YRG01](https://s.click.aliexpress.com/e/_c3BZh7KV) | ![Yaorea YRG01](img/yrg01.png#img-thumbnail) | Cheap handheld counter with a [pulse-tap mod](https://www.blinkyslab.co.uk/2025/04/a-little-gem-the-yaorea-yrg01-pt2-modding-for-radmonorg) to feed clicks into an ESPGeiger pulse input.
 
 Special thanks to all the above original creators. Without your hard work and inspiration this project would not be possible!
+
+## Tube setting
+
+**Tube** (Config, Input, the Tube box) names the GM tube for [ESPGeiger Stations](/output/webapi). It changes nothing on the device: set the ratio, the dead time and α/β/γ yourself, this table has starting figures.
+
+| Tube | Ratio (CPM per µSv/h) | Dead time (µs) | Detects | Ratio from |
+|---|---|---|---|---|
+| SBM-20 | 158 | 190 | β γ | [uRADMonitor][ur] |
+| SBM-19 | 667 | 250 | β γ | [uRADMonitor][ur] |
+| SBM-21 | 20.8 | | β γ | [uRADMonitor][ur] |
+| STS-5 | 150 | | β γ | [uRADMonitor][ur] |
+| SI-22G | 583 | | β γ | [uRADMonitor][ur] |
+| J305 | 175 | | β γ | [J305 note][j], Cs-137 |
+| J321 | 151 | | β γ | as M4011 |
+| M4011 | 151 | | β γ | [Instructables][i] |
+| LND 712 | 168 | 90 | α β γ | [uRADMonitor][ur] |
+| VacuTec 70 013 | 600 | 100 | γ | datasheet, per µGy/h, Cs-137 |
+
+Dead times are from the datasheets. Ratios vary with the source a tube was measured against, see the [tube table](/hardware/espgeigerhw#compatible-geiger-muller-tubes). LND 712 and VacuTec 70 013 run at about 500 V, above the ESPGeigerHW's 400 V.
+
+[ur]: https://github.com/radhoo/uradmonitor_kit1/blob/master/code/124/geiger/detectors.cpp
+[j]: https://iot-devices.com.ua/en/geiger-tube-j305-how-to-calculate-the-conversion-factor-of-cpm-technical-note-en/
+[i]: https://instructables.com/Geiger-Counter
+
+### uRADMonitor tube ids
+
+uRADMonitor's upload names the tube by number (field `10`, [detectors.h](https://github.com/radhoo/uradmonitor_kit1/blob/master/code/124/geiger/detectors.h)). For a future uRADMonitor upload:
+
+| Tube | uRADMonitor id |
+|---|---|
+| Other, J321, VacuTec 70 013 | 0 |
+| SBM-20 | 1 |
+| SBM-19 | 3 |
+| LND 712 | 4 |
+| SI-22G | 6 |
+| STS-5 | 7 |
+| SBM-21 | 9 |
+| J305 | 14 |
+| M4011 | 15 |
+

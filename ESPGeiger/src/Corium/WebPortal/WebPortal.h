@@ -1,5 +1,5 @@
 /*
-  WebPortal.h - Async web UI for ESPGeiger
+  WebPortal.h - Async web UI
 
   Copyright (C) 2026 @steadramon
 
@@ -16,35 +16,66 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef WEBPORTAL_H
-#define WEBPORTAL_H
+#ifndef CORIUM_WEBPORTAL_H
+#define CORIUM_WEBPORTAL_H
 
 #include <EGHttpServer.h>
+
+#ifndef GIT_VERSION
+#define GIT_VERSION ""
+#endif
+// script and css urls, a new build fetches them again
+#define CORIUM_CACHE_BUST "?v=" GIT_VERSION
+#ifndef CORIUM_HTTP_POLL_MS
+#define CORIUM_HTTP_POLL_MS 13   // ms between idle http ticks
+#endif
+
+namespace corium {
+// PROGMEM, smaller than an on() call
+struct WebRoute { PGM_P path; EGHttpServer::Handler h; EGHttpRequest::Method method; };
 
 class WebPortal {
   public:
     void begin(uint16_t port);
-    void tick(uint32_t now);
-    inline uint32_t next_tick_due() const { return _tick_last_ms + 13; }
+    static constexpr uint8_t POLL_MS = CORIUM_HTTP_POLL_MS;   // idle, work waiting goes next ms
+    void poll(uint32_t now);
+    inline uint32_t nextPollDue() const { return _poll_last_ms + pollGap(); }
     bool active() const { return _active; }
+#ifndef ESP8266
+    static bool busy();   // a request or upload being served
+#endif
 
     // Shared page templates
+    // inlineSub: small tag after the title, escaped here
     static void sendPageHead(EGHttpResponse& res, const __FlashStringHelper* title,
                              const char* inlineSub = nullptr);
     static void sendPageTail(EGHttpResponse& res, bool footer = false);
     static void sendPageFooter(EGHttpResponse& res);
+    static void beginPage(EGHttpResponse& res, const __FlashStringHelper* title,
+                          const char* inlineSub = nullptr);
+    static void endPage(EGHttpResponse& res, bool footer = false);
+    static void on(EGHttpServer& http, const WebRoute* rows, size_t n);
     static void infoRow(EGHttpResponse& res, PGM_P key, PGM_P fmt, ...);   // key, fmt in flash
-    static void metricsLine(EGHttpResponse& res, PGM_P fmt, ...);
+    static void sendf(EGHttpResponse& res, PGM_P fmt, ...);   // one chunk, any length
 
-    static void requestRestart(uint32_t delayMs = 1500);   // ok from async callbacks
-    static void sendRestartCountdown(EGHttpResponse& res);
+    static constexpr uint32_t RESTART_MS = 1500;
+    static void requestRestart(uint32_t delay_ms = RESTART_MS);   // ok from async callbacks
+    // the countdown, endPage, then the restart
+    static void endRestartPage(EGHttpResponse& res, uint32_t delay_ms = RESTART_MS);
+    static void sendNotSaved(EGHttpResponse& res);   // commit failed
+    // cached for good, gz in flash
+    static void sendGz(EGHttpResponse& res, const __FlashStringHelper* type,
+                       const uint8_t* gz, size_t len);
 
     static void applyAuthFromPrefs();   // not in loop, walks pref tables
+    static void setHomeName(PGM_P name);   // APP_NAME till set
 
   private:
     EGHttpServer _http;
     bool _active = false;
-    uint32_t _tick_last_ms = 0;
+    uint32_t _poll_last_ms = 0;
+    // a request waiting goes next ms
+    inline uint8_t pollGap() const { return _active && _http.tickWanted() ? 1 : POLL_MS; }
 
     // Non-module routes
     static void hRoot(EGHttpRequest&, EGHttpResponse&, void*);
@@ -54,6 +85,7 @@ class WebPortal {
     static void hReset(EGHttpRequest&, EGHttpResponse&, void*);
     static void hInfo(EGHttpRequest&, EGHttpResponse&, void*);
     static void hAbout(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hPs(EGHttpRequest&, EGHttpResponse&, void*);
     static void hOutputs(EGHttpRequest&, EGHttpResponse&, void*);
     static void hMetrics(EGHttpRequest&, EGHttpResponse&, void*);
     static void hVars(EGHttpRequest&, EGHttpResponse&, void*);
@@ -63,20 +95,23 @@ class WebPortal {
     static void hWebCmd(EGHttpRequest&, EGHttpResponse&, void*);
     static void hEraseWifi(EGHttpRequest&, EGHttpResponse&, void*);
     static void hParam(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hParamBody(EGHttpRequest&, EGHttpServer::BodyEvent,
+    static void hParamJs(EGHttpRequest&, EGHttpResponse&, void*);
+    static bool hParamBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                            const char*, size_t, void*);
     static void hUpdateForm(EGHttpRequest&, EGHttpResponse&, void*);
+    static void hUpdateJs(EGHttpRequest&, EGHttpResponse&, void*);
     static void hUpdateDone(EGHttpRequest&, EGHttpResponse&, void*);
     static void hUpdateProgress(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hUpdateBody(EGHttpRequest&, EGHttpServer::BodyEvent,
+    static bool hUpdateBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                             const char*, size_t, void*);
     static void hWifi(EGHttpRequest&, EGHttpResponse&, void*);
     static void hWifiScan(EGHttpRequest&, EGHttpResponse&, void*);
     static void hWifiSave(EGHttpRequest&, EGHttpResponse&, void*);
     static void hExport(EGHttpRequest&, EGHttpResponse&, void*);
     static void hImport(EGHttpRequest&, EGHttpResponse&, void*);
-    static void hImportBody(EGHttpRequest&, EGHttpServer::BodyEvent,
+    static bool hImportBody(EGHttpRequest&, EGHttpServer::BodyEvent,
                             const char*, size_t, void*);
 };
+}  // namespace corium
 
 #endif

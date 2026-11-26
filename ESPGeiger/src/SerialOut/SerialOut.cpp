@@ -18,76 +18,82 @@
 */
 #ifdef SERIALOUT
 
+#include <new>
 #include <EGFormat.h>
 #include <EGHttpServer.h>
 #include "SerialOut.h"
+#include "App/AppKeys.h"
+#include "App/FeatureBits.h"
+#include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 #include "GeigerInput/SerialFormat.h"
+#include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/Util/MathUtil.h"
-#ifdef ESPG_HV_ADC
-#include "HV/HV.h"
-#endif
 
-EG_PSTR(K_FLAGS,  "flags");
-EG_PSTR(K_FORMAT, "format");
-EG_PSTR(K_BAUD,   "baud");
+CORIUM_PSTR(K_FLAGS,  "flags");
+CORIUM_PSTR(K_FORMAT, "format");
+CORIUM_PSTR(K_BAUD,   "baud");
 
 #define SOUT_TPL_MAX 128
+#define SOUT_BAUD_BOOT 115200   // as Boot
 
 SerialOut serialout;
-EG_REGISTER_MODULE(serialout)
+CORIUM_REGISTER_FEATURE(serialout, FEAT_SERIALOUT)
 
-EG_PSTR(SO_L_FMT,  "Wire format");
-EG_PSTR(SO_O_FMT,  "Labelled|MightyOhm|User template");
-EG_PSTR(SO_L_TPL,  "Template");
-EG_PSTR(SO_H_TPL,  "User template. See /vars.json for live values. Escapes: \\n \\r \\t");
-EG_PSTR(SO_L_BAUD, "Baud override");
-EG_PSTR(SO_H_BAUD, "0=auto (format native). Non-zero overrides.");
+CORIUM_PSTR(SO_L_FMT,  "Wire format");
+CORIUM_PSTR(SO_O_FMT,  "Labelled|MightyOhm|User template");
+CORIUM_PSTR(SO_H_TPL,  "User template. See /vars.json for live values. Escapes: \\n \\r \\t");
+CORIUM_PSTR(SO_L_BAUD, "Baud override");
+CORIUM_PSTR(SO_H_BAUD, "0 = the format's own");
+CORIUM_PSTR(SO_O_BAUD, "0|9600|19200|38400|57600|115200");
 
-static const EGPref SOUT_PREF_ITEMS[] PROGMEM = {
-  {EG_K_INTERVAL, nullptr, nullptr,  "0",  nullptr, 0, 65535,  0,   EGP_UINT,   EGP_HIDDEN},
-  {K_FLAGS,       nullptr, nullptr,  "0",  nullptr, 0, 255,    0,   EGP_UINT,   EGP_HIDDEN},
-  {K_FORMAT,      SO_L_FMT,  nullptr,   "0",  SO_O_FMT, 0, 2,     0,   EGP_ENUM,   0},
-  {K_BAUD,        SO_L_BAUD, SO_H_BAUD, "0",  nullptr, 0, 921600, 0,   EGP_UINT,   EGP_ADVANCED},
-  {EG_K_TPL,      SO_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    SOUT_TPL_MAX, EGP_STRING, 0},
+static const corium::Pref SOUT_PREF_ITEMS[] PROGMEM = {
+  {EG_K_INTERVAL, nullptr, nullptr,  "0",  nullptr, 0, 65535,  0,   corium::P_UINT,   corium::P_HIDDEN},
+  {K_FLAGS,       nullptr, nullptr,  "0",  nullptr, 0, 255,    0,   corium::P_UINT,   corium::P_HIDDEN},
+  {K_FORMAT,      SO_L_FMT,  nullptr,   "0",  SO_O_FMT, 0, 2,     0,   corium::P_ENUM,   0},
+  {K_BAUD,        SO_L_BAUD, SO_H_BAUD, "0",  SO_O_BAUD, 0, 0,  0,   corium::P_UINT,   corium::P_ADVANCED},
+  {EG_K_TPL,      EG_L_TPL,  SO_H_TPL,  "{cpm}\\n", nullptr, 0, 0,    SOUT_TPL_MAX, corium::P_STRING, corium::P_ADVANCED},
 };
-static const EGPrefGroup SOUT_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup SOUT_PREF_GROUP PROGMEM = {
   "sout", "Serial out", 1,
   SOUT_PREF_ITEMS,
   sizeof(SOUT_PREF_ITEMS) / sizeof(SOUT_PREF_ITEMS[0]),
-  EGP_CAT_SYSTEM,
+  corium::P_CAT_SYSTEM,
 };
 
-const EGPrefGroup* SerialOut::prefs_group() { return &SOUT_PREF_GROUP; }
+const corium::PrefGroup* SerialOut::prefsGroup() { return &SOUT_PREF_GROUP; }
 
-void SerialOut::on_prefs_loaded() {
-  _interval   = (uint16_t)EGPrefs::getUInt("sout", EG_K_INTERVAL);
-  _show_flags = (uint8_t)EGPrefs::getUInt("sout", K_FLAGS);
-  _format     = (uint8_t)EGPrefs::getUInt("sout", K_FORMAT);
-  _baud       = (uint32_t)EGPrefs::getUInt("sout", K_BAUD);
-  Log::setSerialLogLevel(_interval == 0);
-  EGModuleRegistry::set_loop_interval(this, _interval > 0 ? 500 : -1);
+void SerialOut::onPrefsLoaded() {
+  _interval_s   = (uint16_t)corium::Prefs::getUInt("sout", EG_K_INTERVAL);
+  _show = (uint8_t)corium::Prefs::getUInt("sout", K_FLAGS);
+  _format     = (uint8_t)corium::Prefs::getUInt("sout", K_FORMAT);
+  _baud       = (uint32_t)corium::Prefs::getUInt("sout", K_BAUD);
+  if (_rest) drain(true);   // send the rest now, before going off or changing baud
+  applyBaud();   // logs the baud while the log still reaches serial
+  quiet_logs();
+  corium::Registry::every(this, _interval_s > 0 ? LOOP_MS : 0);
   resolveFormat();
-  applyBaud();
 }
 
-// not SerialFormat's input IDs
+// Output format ids, not SerialFormat's input ids
 static SerialFormat::FormatFn sout_resolve(uint8_t fmt) {
   switch (fmt) {
-    case 1:  return SerialFormat::fmt_mightyohm;
-    case 2:  return SerialFormat::fmt_user_template;
-    default: return nullptr;       // 0 = Labelled
+    case SerialOut::SO_MIGHTYOHM: return SerialFormat::fmt_mightyohm;
+    case SerialOut::SO_TEMPLATE:  return SerialFormat::fmt_user_template;
+    default: return nullptr;
   }
 }
 
 static uint32_t sout_baud(uint8_t fmt) {
   switch (fmt) {
-    case 1:  return 9600;
-    default: return 0;
+    case SerialOut::SO_MIGHTYOHM: return 9600;
+    default: return SOUT_BAUD_BOOT;
   }
 }
 
@@ -96,20 +102,20 @@ void SerialOut::resolveFormat() {
 }
 
 void SerialOut::save() {
-  EGPrefs::putUInt("sout", EG_K_INTERVAL, _interval);
-  EGPrefs::putUInt("sout", K_FLAGS, _show_flags);
-  EGPrefs::putUInt("sout", K_FORMAT, _format);
-  EGPrefs::putUInt("sout", K_BAUD, _baud);
-  EGPrefs::commit();
+  bool ok = corium::Prefs::putUInt("sout", EG_K_INTERVAL, _interval_s);
+  ok &= corium::Prefs::putUInt("sout", K_FLAGS, _show);
+  if (!corium::Prefs::commitSoon(corium::fastMillis()) || !ok) corium::Log::console(PSTR("SerialOut: Not saved"));
 }
 
+// Only changes baud while streaming, the console stays at the boot baud for recovery
 void SerialOut::applyBaud() {
-  uint32_t target = _baud;
-  if (target == 0 && _format != 0) target = sout_baud(_format);
-  if (target == 0) return;
-  Serial.flush();
 #if !defined(ARDUINO_USB_CDC_ON_BOOT) || ARDUINO_USB_CDC_ON_BOOT == 0
-  Serial.updateBaudRate(target);
+  static uint32_t s_baud = SOUT_BAUD_BOOT;
+  uint32_t b = _interval_s ? (_baud ? _baud : sout_baud(_format)) : SOUT_BAUD_BOOT;
+  if (b != s_baud) corium::Log::console(PSTR("Serial: %lu baud"), (unsigned long)b);
+  s_baud = b;
+  Serial.flush();
+  Serial.updateBaudRate(b);
 #endif
 }
 
@@ -118,7 +124,7 @@ SerialOut::SerialOut() {
 
 void SerialOut::print_cpm() {
   char buf[32];
-  snprintf_P(buf, sizeof(buf), PSTR("CPM: %d\n"), gcounter.get_cpm());
+  snprintf_P(buf, sizeof(buf), PSTR("CPM: %d\n"), (int)gcounter.get_cpm());
   Serial.print(buf);
 }
 
@@ -130,27 +136,70 @@ void SerialOut::print_usv() {
   Serial.print(buf);
 }
 
-void SerialOut::set_show(int var) {
-  _interval = (uint16_t)clamp(var, 0, (int)UINT16_MAX);
-  EGModuleRegistry::set_loop_interval(this, 100);
-  // keep flags for a bare show
-  if (_interval > 0 && _show_flags == 0) {
-    _show_flags = SHOW_CPM;
+// While lines stream, logs stay off serial so nothing lands between them
+void SerialOut::quiet_logs() { corium::Log::setSerialOn(_interval_s == 0); }
+
+void SerialOut::set_show(int secs) {
+  // a bare show with no flags set shows cpm
+  if (secs > 0 && _show == 0) {
+    _show = SHOW_CPM;
   }
-  Log::setSerialLogLevel(_interval == 0);
-  save();
+  setInterval((uint16_t)clamp(secs, 0, (int)UINT16_MAX));
 }
 
 void SerialOut::setInterval(uint16_t v) {
-  _interval = v;
-  EGModuleRegistry::set_loop_interval(this, 100);
+  _interval_s = v;
+  corium::Registry::dueIn(this, REPLAN_MS);
+  applyBaud();
+  quiet_logs();
   save();
 }
 
-void SerialOut::toggle_cpm() { _show_flags ^= SHOW_CPM; Log::setSerialLogLevel(_show_flags == 0); save(); }
-void SerialOut::toggle_usv() { _show_flags ^= SHOW_USV; Log::setSerialLogLevel(_show_flags == 0); save(); }
-void SerialOut::toggle_hv()  { _show_flags ^= SHOW_HV;  Log::setSerialLogLevel(_show_flags == 0); save(); }
-void SerialOut::toggle_cps() { _show_flags ^= SHOW_CPS; Log::setSerialLogLevel(_show_flags == 0); save(); }
+void SerialOut::toggle(uint8_t show) { _show ^= show; save(); }
+
+// console
+
+struct ShowWord {
+  char word[4];
+  uint8_t show;   // 0 = taken, does nothing
+};
+static const ShowWord SHOW_WORDS[] PROGMEM = {
+  {"cpm", SerialOut::SHOW_CPM},
+  {"usv", SerialOut::SHOW_USV},
+  {"cps", SerialOut::SHOW_CPS},
+  {"hv",  M_HAS_HV ? SerialOut::SHOW_HV : 0},
+};
+
+static bool show_toggle(const char* arg) {
+  for (const ShowWord& w : SHOW_WORDS) {
+    if (strcmp_P(arg, w.word) != 0) continue;
+    uint8_t show = pgm_read_byte(&w.show);
+    if (show) serialout.toggle(show);
+    return true;
+  }
+  return false;
+}
+
+static void cmd_show() {
+  char* arg = corium::Console::next();
+  if (arg == NULL) {
+    // A bare show toggles, on means every 1 s
+    serialout.set_show(serialout.interval() > 0 ? 0 : 1);
+    return;
+  }
+  if (show_toggle(arg)) return;
+  int32_t n;
+  if (strcmp_P(arg, PSTR("off")) == 0) serialout.set_show(0);
+  else if (isDigit(arg[0]) && parseI32(arg, &n)) serialout.set_show((int)n);
+  else corium::Log::console(PSTR("Show: Unknown arg '%s'"), arg);
+}
+
+static void cmd_cpm() { serialout.print_cpm(); }
+static void cmd_usv() { serialout.print_usv(); }
+
+CORIUM_REGISTER_CMD(cpm, cmd_cpm)
+CORIUM_REGISTER_CMD(usv, cmd_usv)
+CORIUM_REGISTER_CMD(show, cmd_show)
 
 struct Line {
   uint8_t flags;
@@ -166,70 +215,106 @@ static size_t labelled_line(char* buf, size_t cap, const Line& v) {
   int n;
   if (v.flags & SerialOut::SHOW_CPM) {
     n = snprintf_P(buf + pos, cap - pos, PSTR("CPM: %d"), v.cpm);
-    advance_pos(pos, n, cap);
+    advancePos(pos, n, cap);
   }
   if (v.flags & SerialOut::SHOW_CPS) {
     format_f(f, sizeof(f), v.cps);
     n = snprintf_P(buf + pos, cap - pos, PSTR("%sCPS: %s"), pos ? SP : PSTR(""), f);
-    advance_pos(pos, n, cap);
+    advancePos(pos, n, cap);
   }
   if (v.flags & SerialOut::SHOW_USV) {
     format_f(f, sizeof(f), v.usv);
     n = snprintf_P(buf + pos, cap - pos, PSTR("%suSv: %s"), pos ? SP : PSTR(""), f);
-    advance_pos(pos, n, cap);
+    advancePos(pos, n, cap);
   }
-#ifdef ESPG_HV_ADC
-  if (v.flags & SerialOut::SHOW_HV) {
+  if (M_HAS_HV && (v.flags & SerialOut::SHOW_HV)) {
     n = snprintf_P(buf + pos, cap - pos, PSTR("%sHV: %d"), pos ? SP : PSTR(""), v.hv);
-    advance_pos(pos, n, cap);
+    advancePos(pos, n, cap);
   }
-#endif
+  return pos;
+}
+
+// Writes what fits the tx fifo now, the rest over the next passes
+void SerialOut::send(const char* s, size_t n) {
+  if (Serial.availableForWrite() < (int)n) _rest = new (std::nothrow) char[n];
+  if (!_rest) {
+    // It fits, or there's no heap, so just a blocking write
+    Serial.write((const uint8_t*)s, n);
+    return;
+  }
+  memcpy(_rest, s, n);
+  _rest_n = (uint16_t)n;
+  _rest_at = 0;
+  drain(false);
+}
+
+void SerialOut::drain(bool wait) {
+  size_t n = _rest_n - _rest_at;
+  int room = Serial.availableForWrite();
+  if (!wait && room < (int)n) n = room;
+  Serial.write((const uint8_t*)_rest + _rest_at, n);
+  _rest_at += n;
+  if (_rest_at < _rest_n) {
+    corium::Registry::dueIn(this, 0);
+    return;
+  }
+  delete[] _rest;
+  _rest = nullptr;
+}
+
+// Only reads what's shown, get_cps walks the ring
+static size_t labelled(char* buf, size_t cap, uint8_t flags) {
+  if (flags == 0) return 0;
+
+  Line v = { flags, 0, 0, 0, 0 };
+  if (flags & SerialOut::SHOW_CPM) v.cpm = gcounter.get_cpm();
+  if (flags & SerialOut::SHOW_CPS) v.cps = gcounter.get_cps();
+  if (flags & SerialOut::SHOW_USV) v.usv = gcounter.get_usv();
+  if (M_HAS_HV && (flags & SerialOut::SHOW_HV)) {
+    int32_t hv;
+    if (m_hv_volts(&hv)) v.hv = (int)hv;
+    else v.flags &= ~SerialOut::SHOW_HV;   // no adc
+  }
+  size_t pos = labelled_line(buf, cap, v);
+  if (pos == 0) return 0;
+  if (pos < cap - 1) buf[pos++] = '\n';
   return pos;
 }
 
 void SerialOut::loop(unsigned long now) {
-  if (_interval == 0) {
-    EGModuleRegistry::set_loop_interval(this, -1);
+  uint32_t period = (uint32_t)_interval_s * 1000UL;
+  bool due = (now - _fired_ms) >= period;
+  // If the next line is due or it's off, send the rest now
+  if (_rest) {
+    drain(due);
+    if (_rest) return;
+  }
+  if (_interval_s == 0) {
+    corium::Registry::every(this, 0);
     return;
   }
-  uint32_t period = (uint32_t)_interval * 1000UL;
-  if ((now - _last_fire) < period) {
-    EGModuleRegistry::sleep_until(this, now, _last_fire + period);
+  if (!due) {
+    corium::Registry::dueAt(this, _fired_ms + period);
     return;
   }
-  _last_fire = now;
-  EGModuleRegistry::sleep_until(this, now, now + period);
+  _fired_ms = now;
+  corium::Registry::dueAt(this, now + period);
 
   if (_fmt_fn) {
     char line[SOUT_TPL_MAX * 2];  // vars grow it, cut cleanly past this
     size_t n = _fmt_fn(line, sizeof(line));
-    if (n) Serial.write((const uint8_t*)line, n);
+    if (n) send(line, n);
     return;
   }
-
-  if (_show_flags == 0) return;
-
-  Line v = { _show_flags, gcounter.get_cpm(), gcounter.get_cps(), gcounter.get_usv(), 0 };
-#ifdef ESPG_HV_ADC
-  v.hv = (int)hv.hvReading.get();
-#endif
   char buf[80];
-  size_t pos = labelled_line(buf, sizeof(buf), v);
-  if (pos == 0) return;
-  if (pos < sizeof(buf) - 1) buf[pos++] = '\n';
-  Serial.write((const uint8_t*)buf, pos);
+  size_t n = labelled(buf, sizeof(buf), _show);
+  if (n) send(buf, n);
 }
 
 // HTTP routes
 
 static void hSerial(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  if (serialout.interval() == 0) {
-    serialout.setInterval(1);
-    Log::setSerialLogLevel(false);
-  } else {
-    serialout.setInterval(0);
-    Log::setSerialLogLevel(true);
-  }
+  serialout.setInterval(serialout.interval() == 0 ? 1 : 0);
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 

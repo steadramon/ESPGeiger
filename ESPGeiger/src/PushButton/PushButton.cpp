@@ -19,254 +19,158 @@
 #ifdef GEIGER_PUSHBUTTON
 
 #include "PushButton.h"
+#include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
+#include "Corium/Module/Registry.h"
 #include "Corium/Output/LedSignal.h"
 #include "Corium/System/PinSafety.h"
+#include "App/AppKeys.h"
+#include "App/FeatureBits.h"
+#include "App/LedPatterns.h"
 #include "Corium/System/FastMillis.h"
-#include <Ticker.h>
-#ifdef SSD1306_DISPLAY
-#include "Display/Display.h"
-#endif
+#include "Corium/Util/Debounce.h"
 
 static const uint16_t POLL_MS      = 10;
 static const uint16_t DEBOUNCE_MS  = 30;
 static const uint16_t LONG_PRESS_MS = 2000;
 
-// 0 = next page, 1 = back
+// Slot 0 = next page, 1 = back. Only touched from the loop task
 struct BtnState {
-  volatile int      pin = -1;
-  volatile bool     last_read = false;
-  volatile uint32_t last_change_ms = 0;
-  volatile uint32_t press_start_ms = 0;
-  volatile bool     pressed = false;
-  volatile bool     short_press_pending = false;
-  volatile bool     long_press_fired = false;
-  volatile bool     long_press_pending = false;
+  int      pin = -1;
+  corium::Debounce deb;
+  uint32_t down_ms = 0;
+  bool     long_fired = false;
 };
 static BtnState s_btn[2];
 
-static Ticker buttonTicker;
-
-// long or short, never both
-static void check_long(BtnState& b) {
-#ifdef SSD1306_DISPLAY
-  if (b.long_press_fired || fast_millis() - b.press_start_ms < LONG_PRESS_MS) return;
-  b.long_press_fired = true;
-  b.long_press_pending = true;
-#endif
-}
-
-static void tick_one(BtnState& b) {
-  if (b.pin < 0) return;
-  bool down = (digitalRead(b.pin) == LOW);
-  if (down != b.last_read) {
-    b.last_read = down;
-    b.last_change_ms = fast_millis();
-    return;
-  }
-  if (down == b.pressed) {
-    if (down) check_long(b);
-    return;
-  }
-  uint32_t now = fast_millis();
-  if (now - b.last_change_ms < DEBOUNCE_MS) return;
-  b.pressed = down;
-  if (down) {
-    b.press_start_ms = now;
-    b.long_press_fired = false;
-  } else if (!b.long_press_fired) {
-    b.short_press_pending = true;
-  }
-}
-
-static void button_tick() {
-  tick_one(s_btn[0]);
-  tick_one(s_btn[1]);
-}
-
-#ifdef SSD1306_DISPLAY
-static void do_longpress(unsigned long now) {
-  Log::console(PSTR("Btn: long"));
-  if (display.toggle_auto_off(now)) {
-    LedSignal::displayEnabled();
-  } else {
-    LedSignal::displayDisabled();
-  }
-}
-#endif
+static bool read_down(const BtnState& b) { return digitalRead(b.pin) == LOW; }
 
 PushButton pushbutton;
-EG_REGISTER_MODULE(pushbutton)
+CORIUM_REGISTER_FEATURE(pushbutton, FEAT_BUTTON)
 
 #ifndef BTN_PIN_BLOCKED
-#define BTN_STR_(x) #x
-#define BTN_STR(x)  BTN_STR_(x)
 
-EG_PSTR(BTN_L_PIN, "Button Pin");
-EG_PSTR(BTN_H_PIN, "GPIO for pushbutton (-1 = disabled). Internal pull-up, active LOW.");
+CORIUM_PSTR(BTN_L_PIN, "Button pin");
+CORIUM_PSTR(BTN_H_PIN, "-1 = off. Button to GND, internal pull-up");
 
-static const EGPref BTN_PREF_ITEMS[] PROGMEM = {
-  {EG_K_PIN, BTN_L_PIN, BTN_H_PIN, BTN_STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, EGP_INT, EGP_PIN},
+static const corium::Pref BTN_PREF_ITEMS[] PROGMEM = {
+  {EG_K_PIN, BTN_L_PIN, BTN_H_PIN, STR(PUSHBUTTON_PIN), nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT, corium::P_PIN_BTN},
 };
 
-static const EGPrefGroup BTN_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup BTN_PREF_GROUP PROGMEM = {
   "btn", "Button", 1,
   BTN_PREF_ITEMS,
   sizeof(BTN_PREF_ITEMS) / sizeof(BTN_PREF_ITEMS[0]),
 };
 
-const EGPrefGroup* PushButton::prefs_group() { return &BTN_PREF_GROUP; }
+const corium::PrefGroup* PushButton::prefsGroup() { return &BTN_PREF_GROUP; }
 
-void PushButton::on_prefs_loaded() {
-  int pin1 = (int)EGPrefs::getInt("btn", EG_K_PIN);
+void PushButton::onPrefsLoaded() {
+  int pin1 = (int)corium::Prefs::getInt("btn", EG_K_PIN);
   set_pin(pin1);
-  // pin2 build flag only
+  // pin2 only comes from the build flag
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
-  Log::console(PSTR("Btn: pin=%d pin2=%d"), pin1, (int)PUSHBUTTON_PIN2);
-  EGModuleRegistry::set_loop_interval(this,
-    (pin1 < 0 && PUSHBUTTON_PIN2 < 0) ? -1 : 50);
+  corium::Log::console(PSTR("Btn: pin=%d pin2=%d"), pin1, (int)PUSHBUTTON_PIN2);
 }
 #endif
 
 PushButton::PushButton() {
 }
 
-// detach only on change, keeps the prefs cascade quiet
+// Only resets on a change, which keeps the prefs cascade quiet
 static void set_pin_slot(uint8_t slot, int pin) {
   if (slot >= 2) return;
   BtnState& b = s_btn[slot];
-  if (const char* why = PinSafety::claim_button(pin, PSTR("Btn"))) {
-    Log::console(PSTR("Btn: pin=%d unsafe (%s) - disabled"), pin, why);
+  if (const char* why = corium::PinSafety::claimButton(pin, PSTR("Btn"))) {
+    corium::Log::console(PSTR("Btn: pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
-  if (pin == b.pin && buttonTicker.active()) return;
-  buttonTicker.detach();
-  b.pressed = false;
-  b.last_read = false;
-  b.short_press_pending = false;
-  b.long_press_fired = false;
-  b.long_press_pending = false;
-  b.last_change_ms = fast_millis();
-  b.press_start_ms = b.last_change_ms;
+  if (pin == b.pin) return;
+  uint32_t now = corium::fastMillis();
+  bool down = false;
   b.pin = pin;
   if (pin >= 0) {
     pinMode(pin, INPUT_PULLUP);
     delayMicroseconds(20);
-    bool down = (digitalRead(pin) == LOW);
-    b.last_read = down;
-    b.pressed = down;
-    b.long_press_fired = down;
+    down = read_down(b);
   }
-  if (s_btn[0].pin >= 0 || s_btn[1].pin >= 0) {
-    buttonTicker.attach_ms(POLL_MS, button_tick);
-  }
+  // If held at boot, the release isn't a short press
+  b.deb.reset(down, now);
+  b.down_ms = now;
+  b.long_fired = down;
+  bool on = s_btn[0].pin >= 0 || s_btn[1].pin >= 0;
+  corium::Registry::every(&pushbutton, on ? POLL_MS : 0);
 }
 
 void PushButton::set_pin(int pin)  { set_pin_slot(0, pin); }
 void PushButton::set_pin2(int pin) { set_pin_slot(1, pin); }
 
+// The boot hold reads the button before begin(), fixed pins are set here
 void PushButton::init()
-{
-  static bool ready = false;
-  if (ready) return;
-  if (s_btn[0].pin >= 0) set_pin_slot(0, s_btn[0].pin);
-  if (s_btn[1].pin >= 0) set_pin_slot(1, s_btn[1].pin);
-  ready = true;
-}
-
-void PushButton::begin()
 {
 #ifdef BTN_PIN_BLOCKED
   if (PUSHBUTTON_PIN  >= 0) set_pin(PUSHBUTTON_PIN);
   if (PUSHBUTTON_PIN2 >= 0) set_pin2(PUSHBUTTON_PIN2);
-  Log::console(PSTR("Btn: pin=%d pin2=%d"),
-               (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
+#else
+  // safe mode skips onPrefsLoaded, so read the pin here for the boot hold
+  if (s_btn[0].pin < 0) set_pin((int)corium::Prefs::getInt("btn", EG_K_PIN));
 #endif
-  init();
 }
 
+void PushButton::begin()
+{
+  init();
+#ifdef BTN_PIN_BLOCKED
+  corium::Log::console(PSTR("Btn: pin=%d pin2=%d"),
+                       (int)PUSHBUTTON_PIN, (int)PUSHBUTTON_PIN2);
+#endif
+}
+
+// Samples the pins too, as setup has no loop
 bool PushButton::isPressed()
 {
-  return s_btn[0].pressed || s_btn[1].pressed;
-}
-
-bool PushButton::is_active()
-{
-  return s_btn[0].pin >= 0 || s_btn[1].pin >= 0;
-}
-
-#ifdef PIN_SCAN
-// Diagnostic, logs any pin going LOW
-static bool pin_scan_skips(int p) {
-  if (p == 0 || p == 41 || p == 42 || p == 48) return true;
-  if (p >= 22 && p <= 25) return true;      // gap on S3
-  return p >= 26 && p <= 37;                // possible flash/PSRAM
-}
-
-static void pin_scan_init() {
-  for (int p = 1; p <= 48; p++) {
-    if (pin_scan_skips(p)) continue;
-    pinMode(p, INPUT_PULLUP);
+  uint32_t now = corium::fastMillis();
+  for (BtnState& b : s_btn) {
+    if (b.pin >= 0) b.deb.step(read_down(b), now, DEBOUNCE_MS);
   }
+  return s_btn[0].deb.level || s_btn[1].deb.level;
 }
 
-static void pin_scan_poll() {
-  static uint8_t last[49] = {0};
-  static bool primed = false;
-  if (!primed) {
-    delay(5);
-    for (int p = 1; p <= 48; p++) last[p] = digitalRead(p) ? 1 : 0;
-    primed = true;
-    return;
-  }
-  for (int p = 1; p <= 48; p++) {
-    if (pin_scan_skips(p)) continue;
-    uint8_t cur = digitalRead(p) ? 1 : 0;
-    if (cur != last[p]) {
-      Log::console(PSTR("PinScan: GPIO%d %s"), p, cur ? "HIGH" : "LOW");
-      last[p] = cur;
-    }
-  }
-}
-
-static void pin_scan_loop(unsigned long now) {
-  static bool inited = false;
-  if (!inited) { pin_scan_init(); inited = true; }
-  static unsigned long s_last = 0;
-  if (now - s_last >= 30) { s_last = now; pin_scan_poll(); }
-}
-#endif
-
-#ifdef SSD1306_DISPLAY
-static void take_long_press(BtnState& b, unsigned long now) {
-  if (!b.long_press_pending) return;
-  b.long_press_pending = false;
-  do_longpress(now);
-}
-#endif
-
-static void take_short_press(uint8_t i, unsigned long now) {
-  BtnState& b = s_btn[i];
-  if (!b.short_press_pending) return;
-  b.short_press_pending = false;
-  Log::console(PSTR("Btn: short"));
-  LedSignal::shortPressAck();
-#ifdef SSD1306_DISPLAY
-  display.button(now, i == 0 ? 1 : -1);
-#endif
+static void short_press(uint8_t i) {
+  corium::Log::console(PSTR("Btn: Short"));
+  corium::LedSignal::play(LED_ACK);
+  corium::Registry::emit(PushButton::TOPIC_PRESS);
+  if (i) corium::Registry::emit(PushButton::TOPIC_BACK);
   gcounter.reset_alarm();
 }
 
+// long or short, never both
+static void check_long(BtnState& b, unsigned long now) {
+  if (b.long_fired || (uint32_t)(now - b.down_ms) < LONG_PRESS_MS) return;
+  if (!corium::Registry::heard(PushButton::TOPIC_LONG)) return;
+  b.long_fired = true;
+  corium::Log::console(PSTR("Btn: Long"));
+  corium::Registry::emit(PushButton::TOPIC_LONG);
+}
+
+static void step_one(uint8_t i, unsigned long now) {
+  BtnState& b = s_btn[i];
+  if (b.pin < 0) return;
+  bool down = read_down(b);
+  if (b.deb.step(down, now, DEBOUNCE_MS)) {
+    if (down) {
+      b.down_ms = now;
+      b.long_fired = false;
+    } else if (!b.long_fired) {
+      short_press(i);
+    }
+  }
+  if (b.deb.level && b.deb.read) check_long(b, now);   // not while settling
+}
+
+// every POLL_MS while a pin is set
 void PushButton::loop(unsigned long now)
 {
-#ifdef PIN_SCAN
-  pin_scan_loop(now);
-#endif
-  if (s_btn[0].pin < 0 && s_btn[1].pin < 0) return;
-#ifdef SSD1306_DISPLAY
-  for (uint8_t i = 0; i < 2; i++) take_long_press(s_btn[i], now);
-#endif
-  for (uint8_t i = 0; i < 2; i++) take_short_press(i, now);
+  for (uint8_t i = 0; i < 2; i++) step_one(i, now);
 }
 #endif

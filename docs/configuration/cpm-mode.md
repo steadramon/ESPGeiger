@@ -8,7 +8,7 @@ parent: Configuration
 
 # CPM Calculation Mode
 
-**CPM mode** picks how the displayed CPM is calculated. Set it on the [Config page](/configuration), Input tab, in the advanced settings. Changes apply at once, no reboot.
+**CPM mode** picks how the displayed CPM is calculated. Set it on the [Config page](/configuration), Input tab, in the advanced settings. Changes apply at once, no restart.
 
 ## Picking a mode
 
@@ -23,12 +23,12 @@ parent: Configuration
 | Value | Menu name | Behaviour |
 |---|---|---|
 | 0 | Fast start | Uses recent pulses just after boot, then blends into Bucket once a full window of data exists. |
-| 1 | Live ring | Rate over the last 256 pulses. Very smooth at background, quick at high rates, slow to follow change at very low rates. |
-| 2 | Fixed 60s | Rate over the last 60 seconds, capped at 64 pulses, so the window narrows above about 64 CPM. Can read 0 if no pulse landed in the last minute. |
-| 3 | Bucket *(default)* | Average of the per-second counts over the last 60 seconds. Stable, predictable, slowest to respond. |
-| 4 | Adaptive fast | Rate over the last 19 pulses or 5 seconds, whichever is shorter. Fast, but jumps around at background rates. |
+| 1 | Live ring | Rate over the last <!-- gen:const PULSE_RING_SIZE -->256<!-- /gen --> pulses. Very smooth at background, quick at high rates, slow to follow change at very low rates. |
+| 2 | Fixed 60s | Rate over the last <!-- gen:const FIXED_US us as=s -->60 seconds<!-- /gen -->, capped at <!-- gen:const FIXED_N -->64<!-- /gen --> pulses, so the window narrows above about <!-- gen:const FIXED_N -->64<!-- /gen --> CPM. Can read 0 if no pulse landed in the last minute. |
+| 3 | Bucket *(default)* | Average of the per-second counts over the last <!-- gen:const GEIGER_CPM_COUNT s as=s -->60 seconds<!-- /gen -->. Stable, predictable, slowest to respond. |
+| 4 | Adaptive fast | Rate over the last <!-- gen:const FAST_N -->19<!-- /gen --> pulses or <!-- gen:const FAST_US us -->5 seconds<!-- /gen -->, whichever is shorter. Fast, but jumps around at background rates. |
 
-On serial builds for counters that only report CPM, Bucket uses the **CPM Window** setting (default 30 s) instead of 60 s. These counters already smooth their own CPM, so the display lags by roughly their window plus yours. See [Serial Counters](/hardware/serial#cpm-window-option).
+On serial builds for counters that only report CPM, Bucket uses the **CPM window** setting (default <!-- gen:const counter.cpm_window s short -->30 s<!-- /gen -->) instead of <!-- gen:const GEIGER_CPM_COUNT s as=s short -->60 s<!-- /gen -->. These counters already smooth their own CPM, so the display lags by roughly their window plus yours. See [Serial Counters](/hardware/serial#cpm-window-option).
 
 ## What changes when I switch modes
 
@@ -39,16 +39,14 @@ The mode changes the live CPM, CPS and dose shown to your own consumers:
 * Live serial output / GeigerLog connection
 * MQTT (your own broker / Home Assistant)
 * Webhook (your own URL)
-* ThingSpeak (your own channel)
 * Local UDP broadcast between your ESPGeiger devices
 
-Public aggregators always get a steady 60-second value, so the network sees consistent data from every device:
+Uploads to outside services always get a steady 60-second value, so the network sees consistent data from every device:
 
-* **[Radmon](/output/radmon)** (radmon.org)
-* **URADMonitor** (uradmonitor.com)
-* **Safecast** (safecast.org)
+* **[Radmon](/output/radmon)** (radmon.org; with an interval over 90 s it gets the 5 or 15 minute average instead)
 * **[ESPGeiger Stations](/output/webapi)** (stations.espgeiger.com)
 * **[GMC / GeigerLog](/output/gmc)** protocol
+* **[ThingSpeak](/output/thingspeak)** (your own channel)
 
 The mode never affects the 5- and 15-minute averages, total and lifetime counts, the 24-hour history or the inter-pulse histogram.
 
@@ -69,9 +67,9 @@ of pulses behind the reading. Quick reference:
 | 1000+ | ±6% | Very solid |
 
 At background rates, collecting ~256 pulses takes around 8 minutes;
-at higher rates it happens much faster. Live ring and Fixed 60s tend to
-give the most solid readings at low rates because they widen the
-window to collect more pulses.
+at higher rates it happens much faster. Live ring gives the most solid
+reading at low rates, as its window widens to hold
+<!-- gen:const PULSE_RING_SIZE -->256<!-- /gen --> pulses.
 
 Details of the calculations, rate limits and memory use are on the [CPM mode internals](/dev/cpm-mode-internals) developer page.
 

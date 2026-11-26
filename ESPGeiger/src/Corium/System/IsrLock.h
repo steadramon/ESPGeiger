@@ -1,0 +1,119 @@
+/*
+  IsrLock.h - Short lock against an interrupt, one shape for both chips.
+
+  Copyright (C) 2026 @steadramon
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+#ifndef CORIUM_ISRLOCK_H
+#define CORIUM_ISRLOCK_H
+
+#include <Arduino.h>
+#include <atomic>
+#ifdef NATIVE_TEST
+#include <mutex>
+#endif
+
+// ISR code kept in ram
+#define CORIUM_ISR_ATTR IRAM_ATTR
+
+namespace corium {
+namespace IsrLock {
+
+  static inline __attribute__((always_inline)) void pinOnFall(int pin, void (*fn)()) {
+    attachInterrupt(digitalPinToInterrupt(pin), fn, FALLING);
+  }
+
+  static inline __attribute__((always_inline)) void pinOff(int pin) {
+    detachInterrupt(digitalPinToInterrupt(pin));
+  }
+
+  // The esp32 isr may be on the other core, the 8266 just masks interrupts, the host uses a real lock
+  struct Mux {
+#if defined(ESP32)
+    portMUX_TYPE m = portMUX_INITIALIZER_UNLOCKED;
+#elif defined(NATIVE_TEST)
+    std::mutex m;
+#endif
+  };
+
+  // Call from the loop
+  static inline __attribute__((always_inline)) void enter(Mux& x) {
+#if defined(ESP32)
+    portENTER_CRITICAL(&x.m);
+#elif defined(NATIVE_TEST)
+    x.m.lock();
+#else
+    (void)x;
+    noInterrupts();
+#endif
+  }
+
+  static inline __attribute__((always_inline)) void leave(Mux& x) {
+#if defined(ESP32)
+    portEXIT_CRITICAL(&x.m);
+#elif defined(NATIVE_TEST)
+    x.m.unlock();
+#else
+    (void)x;
+    interrupts();
+#endif
+  }
+
+  // Call in the isr. 8266 isrs don't nest, so nothing to do there
+  static inline __attribute__((always_inline)) void enterIsr(Mux& x) {
+#if defined(ESP32)
+    portENTER_CRITICAL_ISR(&x.m);
+#elif defined(NATIVE_TEST)
+    x.m.lock();
+#else
+    (void)x;
+#endif
+  }
+
+  static inline __attribute__((always_inline)) void leaveIsr(Mux& x) {
+#if defined(ESP32)
+    portEXIT_CRITICAL_ISR(&x.m);
+#elif defined(NATIVE_TEST)
+    x.m.unlock();
+#else
+    (void)x;
+#endif
+  }
+
+  // Set from another task, read lock-free by the loop
+  // load + store under the lock, the 8266 has no atomic or
+  struct Bits {
+    Mux mux;
+    std::atomic<uint32_t> w{0};
+
+    void set(uint32_t b) {
+      enter(mux);
+      w.store(w.load(std::memory_order_relaxed) | b, std::memory_order_relaxed);
+      leave(mux);
+    }
+    bool any() const { return w.load(std::memory_order_relaxed) != 0; }
+    uint32_t take() {
+      enter(mux);
+      uint32_t v = w.load(std::memory_order_relaxed);
+      w.store(0, std::memory_order_relaxed);
+      leave(mux);
+      return v;
+    }
+  };
+
+}
+}  // namespace corium
+
+#endif

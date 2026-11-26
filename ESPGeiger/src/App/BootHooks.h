@@ -1,5 +1,5 @@
 /*
-  BootHooks.h - Setup-time hooks for OLED and pushbutton, stubbed when not built.
+  BootHooks.h - setup hooks for OLED and pushbutton
 
   Copyright (C) 2026 @steadramon
 
@@ -20,7 +20,10 @@
 #define BOOT_HOOKS_H
 
 #include <Arduino.h>
+#include "Corium/Logger/Logger.h"
+#include "Corium/System/BootButton.h"
 #include "Corium/System/FastMillis.h"
+#include "App/LedPatterns.h"
 
 #ifdef SSD1306_DISPLAY
 #include "Display/Display.h"
@@ -32,11 +35,23 @@
 #include "AudioTick/AudioTick.h"
 #include "Voice/Voice.h"
 #endif
+#ifdef GEIGER_BUZZER
+#include "Sound/Sound.h"
+#endif
+#ifdef ALERT_OUT
+#include "AlertOut/AlertOut.h"
+#endif
+#ifdef PULSE_OUT
+#include "PulseOut/PulseOut.h"
+#endif
+#ifdef GEIGER_NEOPIXEL
+#include "NeoPixel/NeoPixel.h"
+#endif
 
 namespace BootHooks {
 
-  // under 5s offline, 5s+ full reset (keeps /api.key)
-  enum class ButtonHold : uint8_t { NONE = 0, OFFLINE = 1, FULL_RESET = 2 };
+  // Held under 5s goes offline, 5s or more is a full reset (keeps /api.key)
+  using ButtonHold = corium::BootButton::Hold;
 
   inline void displayWifiDisabled() {
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
@@ -46,7 +61,7 @@ namespace BootHooks {
 
   inline void displaySetupWifi(const char* host) {
 #ifdef AUDIO_TICK
-    // I2S not up yet
+    // I2S isn't up yet, start it here
     audiotick.begin();
     voice.silence(1000);
     voice.speakWord("setup_wifi");
@@ -54,6 +69,26 @@ namespace BootHooks {
 #ifdef SSD1306_DISPLAY
     display.setup_wifi(host);
 #endif
+#ifdef GEIGER_BUZZER
+    sound.setup_portal();
+#endif
+  }
+
+  // After prefs load, before wifi joins
+  inline void parkOutputs(bool safe) {
+#ifdef ALERT_OUT
+    alertout.park();
+#endif
+#ifdef PULSE_OUT
+    pulseout.park();
+#endif
+#ifdef GEIGER_NEOPIXEL
+    if (safe) neopixel.park();
+#endif
+#ifdef GEIGER_BUZZER
+    sound.park();
+#endif
+    (void)safe;
   }
 
   inline void displaySafeMode() {
@@ -70,52 +105,30 @@ namespace BootHooks {
 
   inline void displayResetTimeout() {
 #ifdef SSD1306_DISPLAY
-    display.wake(fast_millis());
+    display.wake(corium::fastMillis());
 #endif
   }
 
-  inline void displayWipeCountdown(int s) {
+  // 0 = armed
+  inline void displayWipe(int s) {
+    led_hold_tick();
 #if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
     display.wipe(s);
 #endif
   }
 
-  inline void displayWipeReady() {
-#if defined(SSD1306_DISPLAY) && defined(GEIGER_PUSHBUTTON)
-    display.wipe(0);
-#endif
-  }
-
-  // Blocks until released
-  inline ButtonHold checkStartupButtonHold() {
+  // Blocks until released. In safe mode it can only do a full reset, never offline
+  inline ButtonHold checkStartupButtonHold(bool safe = false) {
 #ifdef GEIGER_PUSHBUTTON
     pushbutton.init();
-    if (!pushbutton.isPressed()) return ButtonHold::NONE;
-
-    Serial.println(F("BOOT: button held - offline mode, hold 5s for factory reset"));
-    displayWifiDisabled();
-    uint32_t start = fast_millis();
-    int last_shown = 999;
-    bool wipe = false;
-
-    while (pushbutton.isPressed()) {
-      uint32_t held_ms = fast_millis() - start;
-      int remain = 5 - (int)(held_ms / 1000);
-      if (remain != last_shown) {
-        last_shown = remain;
-        if (remain >= 1) {
-          displayWipeCountdown(remain);
-        } else if (!wipe) {
-          wipe = true;
-          displayWipeReady();
-          Serial.println(F("BOOT: factory reset armed"));
-        }
-      }
-      delay(50);
+    ButtonHold hold = corium::BootButton::check([] { return pushbutton.isPressed(); },
+                                                safe ? +[] {} : &displayWifiDisabled, displayWipe);
+    if (safe && hold == ButtonHold::OFFLINE) {
+      corium::Log::console(PSTR("BOOT: safe mode - offline ignored"));
+      hold = ButtonHold::NONE;
     }
-    delay(500);
-    displayDisableTimeout();
-    return wipe ? ButtonHold::FULL_RESET : ButtonHold::OFFLINE;
+    if (hold != ButtonHold::NONE) displayDisableTimeout();
+    return hold;
 #else
     return ButtonHold::NONE;
 #endif

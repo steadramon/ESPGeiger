@@ -18,14 +18,16 @@ ESPGeiger can be configured to send to a ThingSpeak Channel, updating it every 9
 2. __Setup New Channel__: Login to your thingspeak.com account. Click "New Channel" from the Channels page.
 3. __Configure New Channel__: Name and Describe the Channel. Set up the Field variables as below.
 4. __Save New Channel__: Click __Save Channel__. Open the channel's __API Keys__ tab and copy the __Write API Key__.
-5. __Configure ESPGeiger__: On the [Config page](/configuration), open the __Upload__ tab, tick __Enable__ under __ThingSpeak__ and paste the Write API Key into __Channel Key__.
+5. __Configure ESPGeiger__: On the [Config page](/configuration), open the __Upload__ tab, tick __Enable__ under __ThingSpeak__ and paste the Write API Key into __Channel key__. The Write API Key goes to ThingSpeak in the request URL over plain HTTP.
+
+Plain http: if the site goes https-only the console says `Site moved (https?), can't follow` and every upload fails.
 
 ## Field Configuration
 
 | Field | Description |
 |---|---|
 | Field 1 | `CPM` |
-| Field 2 | `μSv` |
+| Field 2 | `µSv/h` |
 | Field 3 | `CPM5` |
 | Field 4 | `CPM15` |
 | Field 5 | `Temperature` (°C, when an [environment sensor](/configuration/env) is present) |

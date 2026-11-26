@@ -27,14 +27,15 @@
 // 100-599 or -1
 int eg_http_status(const char* line, size_t n);
 
-// in place, needs a NUL after n
+// in place, needs a NUL after n; name and value point into line
 bool eg_http_header(char* line, size_t n, char** name, char** value);
 
+// hex size, extensions ignored
 bool eg_http_chunk_size(const char* line, size_t n, uint32_t* out);
 
 // request side
-bool eg_http_token(const char* s, size_t n);
-bool eg_http_text(const char* s, size_t n);
+bool eg_http_token(const char* s, size_t n);   // method or header name
+bool eg_http_text(const char* s, size_t n);    // no control bytes but tab
 
 // -1 = not hex
 int eg_http_hex(char c);

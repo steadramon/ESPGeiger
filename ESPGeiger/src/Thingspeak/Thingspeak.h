@@ -23,29 +23,30 @@
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Net/EGHttpPoster.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Net/HttpPoster.h"
+#include "Corium/Prefs/Prefs.h"
 
+// s between uploads
 #ifndef THINGSPEAK_INTERVAL
 #define THINGSPEAK_INTERVAL 90
 #endif
 
+// fields: 1 cpm, 2 uSv/h, 3 cpm5, 4 cpm15; 5-7 t h p appended when present
 const char TS_URI[] PROGMEM = "http://api.thingspeak.com/update?api_key=%s&field1=%d&field2=%s&field3=%d&field4=%d";
 
-class Thingspeak : public EGHttpPoster {
+class Thingspeak : public corium::HttpPoster {
   public:
     Thingspeak();
     const char* name() override { return PSTR("thgspk"); }
-    void on_prefs_loaded() override;
-    const EGPrefGroup* prefs_group() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    const corium::PrefGroup* prefsGroup() override;
+    corium::LegacyRows legacyAliases() override;
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;
-    const char* log_tag() override { return PSTR("Thingspeak"); }
-    const char* status_key() override { return PSTR("thingspeak"); }
-    uint16_t timeout_s() const override { return 5; }
-    size_t reply_cap() const override { return 32; }
+    const char* logTag() override { return PSTR("ThingSpeak"); }
+    const char* statusKey() override { return PSTR("thingspeak"); }
+    uint16_t timeoutS() const override { return 5; }
+    size_t replyCap() const override { return 32; }
 };
 
 extern Thingspeak thingspeak;

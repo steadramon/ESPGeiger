@@ -1,0 +1,9 @@
+{
+  "name": "EGTune",
+  "version": "0.1.0",
+  "description": "Tunes as text, RTTTL or Hz:ms steps, read one step at a time.",
+  "keywords": "rtttl, tune, buzzer, esp8266, esp32",
+  "license": "GPL-3.0",
+  "frameworks": "arduino",
+  "platforms": ["espressif8266", "espressif32"]
+}

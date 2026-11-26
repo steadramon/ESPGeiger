@@ -27,28 +27,25 @@
 #define GEIGER_MODEL "genpulse"
 #endif
 
-#ifndef GEIGER_TXPIN
-#define GEIGER_TXPIN 12
-#endif
-
 #include "GeigerInput/GeigerInputTest.h"
 
-class GeigerTestPulseInt : public GeigerInputTest
+// Even square wave on TX at the target cps, counted back on RX
+class GeigerTestPulseInt final : public GeigerInputTest
 {
   public:
     GeigerTestPulseInt();
-    void begin();
-    void loop();
+    void begin() override;
+    void loop() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
-    static uint32_t IRAM_ATTR pulseInterrupt();
+    static uint32_t CORIUM_ISR_ATTR pulseInterrupt();
     double calcPWM();
-    void secondTicker();
+    void secondTicker() override;
 #ifdef USE_PCNT
-    int collect();
+    int collect() override;
 #endif
   private:
-    int _target_pwm = 0;
-    int _current_pwm = 0;
+    int _target_half = 0;
+    int _cur_half = 0;
 };
 #endif

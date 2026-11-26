@@ -22,29 +22,25 @@
 #include <Arduino.h>
 #include "GeigerInput/GeigerInput.h"
 #include "Pcnt.h"
-
-#ifndef GEIGER_TXPIN
-#define GEIGER_TXPIN 12
-#endif
-
 #include "GeigerInput/GeigerInputTest.h"
 
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "genpulse"
 #endif
 
-class GeigerTestPulse : public GeigerInputTest
+// Poisson pulses out on TX, counted back on RX
+class GeigerTestPulse final : public GeigerInputTest
 {
   public:
     GeigerTestPulse();
-    void begin();
-    void loop();
+    void begin() override;
+    void loop() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
-    static uint32_t IRAM_ATTR pulseInterrupt();
-    void secondTicker();
+    static uint32_t CORIUM_ISR_ATTR pulseInterrupt();
+    void secondTicker() override;
 #ifdef USE_PCNT
-    int collect();
+    int collect() override;
 #endif
 };
 #endif

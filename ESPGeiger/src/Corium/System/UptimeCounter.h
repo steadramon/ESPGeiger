@@ -17,23 +17,17 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPGEIGER_UPTIMECOUNTER_H
-#define ESPGEIGER_UPTIMECOUNTER_H
+#ifndef CORIUM_UPTIMECOUNTER_H
+#define CORIUM_UPTIMECOUNTER_H
 
 #include <stdint.h>
 
-// Monotonic seconds since boot across the 49.71 day millis() wrap.
-//
-// tick() must be called at least once per wrap or a whole wrap is lost. The
-// unsigned delta is correct across the wrap. Do not scale or compare a
-// reconstructed time: it overflows uint32 at 4294967 s, the instant millis()
-// wraps.
-//
-// Types are uint32_t, not `unsigned long`: same width on target, 64-bit on a
-// host, where a wrap test would silently never fire.
+namespace corium {
+// Counts seconds across the millis() wrap
+// uint32_t not unsigned long, since a host build's 64 bit one never wraps
 class UptimeCounter {
 public:
-  uint32_t tick(uint32_t now_ms) {   // at least once per millis wrap
+  uint32_t tick(uint32_t now_ms) {   // At least once per millis wrap
     if (now_ms < _last_ms) _wraps++;
     _acc += now_ms - _last_ms;
     _last_ms = now_ms;
@@ -41,19 +35,18 @@ public:
     return _value;
   }
 
-  // Result of the last tick(). tick() is a read-modify-write, so it needs a
-  // single writer; every other reader takes this instead. Zero until the
-  // first tick().
+  // tick() is the only writer
   uint32_t value() const { return _value; }
 
-  // Diagnostic; tick() does not use it.
+  // Diagnostic only
   uint16_t wraps() const { return _wraps; }
 
 private:
   uint32_t _last_ms = 0;
-  uint32_t _acc     = 0;   // ms not yet counted, always < 1000 after tick()
+  uint32_t _acc     = 0;   // < 1000 after tick()
   uint32_t _value   = 0;
   uint16_t _wraps   = 0;
 };
+}  // namespace corium
 
 #endif

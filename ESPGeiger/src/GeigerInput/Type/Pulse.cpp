@@ -18,103 +18,160 @@
 */
 #include "Pulse.h"
 
-#if GEIGER_IS_PULSE(GEIGER_TYPE)
+#if GEIGER_TYPE == GEIGER_TYPE_PULSE
 
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/MathUtil.h"
-#ifdef USE_PCNT
+#ifdef PCNT_SELECTABLE
 #include "Counter/Counter.h"
+#endif
+
+#ifdef NO_PCNT_ALIAS
+// So a _no_pcnt device's /update finds its own env in the bin
+static const char NO_PCNT_TAG[] PROGMEM = "<EGENV:" BUILD_ENV "_no_pcnt:ENV>";
 #endif
 
 GeigerPulse::GeigerPulse() {
 };
 
+#ifdef COUNT_SELFTEST
+static volatile bool s_selftest_hit = false;
+static bool s_count_ok = true;
+
+static void CORIUM_ISR_ATTR selftest_isr() { s_selftest_hit = true; }
+
+// Pulls the pin low the way the detector would, open collector on both sides
+static bool count_path_ok(int pin) {
+  s_selftest_hit = false;
+  pinMode(pin, INPUT);
+  corium::IsrLock::pinOnFall(pin, selftest_isr);
+  digitalWrite(pin, LOW);
+  pinMode(pin, OUTPUT_OPEN_DRAIN);
+  delayMicroseconds(100);
+  pinMode(pin, INPUT);
+  corium::IsrLock::pinOff(pin);
+  return s_selftest_hit;
+}
+
+static bool m_count_ok(corium::MValue* v) { v->b = s_count_ok; return true; }
+
+static const corium::MRow SELFTEST_ROWS[] PROGMEM = {
+  CORIUM_M_ROW("count_ok", "", m_count_ok, corium::M_BOOL, 0, corium::MU_NONE, corium::M_OUT_JSON, 0),
+};
+
+corium::MeasureRows GeigerPulse::measurements() { return corium::MeasureRows(SELFTEST_ROWS); }
+#endif
+
 void GeigerPulse::begin() {
   GeigerInput::begin();
-#ifdef USE_PCNT
-  Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
-  // pull-up for PCNT init, user pull after
-  gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLUP_ONLY);
-  pcnt_config_t pcntConfig = {
-    .pulse_gpio_num = _rx_pin,
-    .ctrl_gpio_num = -1,
-    .pos_mode = PCNT_CHANNEL_EDGE_ACTION_HOLD,
-    .neg_mode = PCNT_CHANNEL_EDGE_ACTION_INCREASE,
-    .counter_h_lim = PCNT_HIGH_LIMIT,
-    .counter_l_lim = PCNT_LOW_LIMIT,
-    .unit = PCNT_UNIT,
-    .channel = PCNT_CHANNEL,
-  };
-  pcnt_unit_config(&pcntConfig);
-  pcnt_counter_pause(PCNT_UNIT);
-  #ifdef PCNT_FILTER
-  pcnt_set_filter_value(PCNT_UNIT, PCNT_FILTER);
-  pcnt_filter_enable(PCNT_UNIT);
-  #endif
-  pcnt_counter_clear(PCNT_UNIT);
-  pcnt_counter_resume(PCNT_UNIT);
-  set_pin_pull(_pin_pull);
-#else
-  Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
-  pinMode(_rx_pin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+#ifdef NO_PCNT_ALIAS
+  asm volatile("" : : "r"(NO_PCNT_TAG));   // keep it linked
 #endif
+#ifdef PCNT_SELECTABLE
+  if (_pcnt) {
+    corium::Log::console(PSTR("GeigerPulse: PCNT RXPIN: %d"), _rx_pin);
+    // Pull-up for the PCNT init, then the user's pull
+    gpio_set_pull_mode((gpio_num_t)_rx_pin, GPIO_PULLUP_ONLY);
+    pcnt_begin(_rx_pin, GPIO_PULLUP_ONLY);
+    set_pin_pull(_pin_pull);
+    _polls = true;
+    return;
+  }
+#endif
+#ifdef COUNT_SELFTEST
+  s_count_ok = _rx_pin >= 0 && count_path_ok(_rx_pin);
+  corium::Log::console(PSTR("GeigerPulse: Self test %s"), s_count_ok ? PSTR("OK") : PSTR("FAILED"));
+#endif
+  corium::Log::console(PSTR("GeigerPulse: Interrupt RXPIN: %d"), _rx_pin);
+  pinMode(_rx_pin, INPUT);
+#ifdef PCNT_SELECTABLE
+  set_pin_pull(_pin_pull);
+#endif
+  corium::IsrLock::pinOnFall(_rx_pin, countInterrupt);
 }
 
 void GeigerPulse::stopForOTA() {
-#ifdef USE_PCNT
-  pcnt_counter_pause(PCNT_UNIT);
-#else
-  detachInterrupt(digitalPinToInterrupt(_rx_pin));
+#ifdef PCNT_SELECTABLE
+  if (_pcnt) {
+    pcnt_counter_pause(PCNT_UNIT);
+    return;
+  }
 #endif
+  stopIsr();
 }
 
 void GeigerPulse::restartAfterOTA() {
-#ifdef USE_PCNT
-  pcnt_counter_resume(PCNT_UNIT);
-#else
-  attachInterrupt(digitalPinToInterrupt(_rx_pin), countInterrupt, FALLING);
+#ifdef PCNT_SELECTABLE
+  if (_pcnt) {
+    pcnt_counter_resume(PCNT_UNIT);
+    return;
+  }
 #endif
+  restartIsr();
 }
 
-#ifdef USE_PCNT
+#ifdef PCNT_SELECTABLE
+// 1 s the first time. After a stall the pulses are spread over the whole gap
+static inline __attribute__((always_inline)) uint32_t span_us(int64_t now_us, int64_t last_us) {
+  if (last_us == 0 || now_us <= last_us) return 1000000UL;
+  int64_t s = now_us - last_us;
+  return s < (int64_t)UINT32_MAX ? (uint32_t)s : UINT32_MAX;
+}
+
+// Wakes run loop() too, so it keeps its own timer
+void GeigerPulse::loop() {
+  if (!_pcnt) return;
+  uint32_t now = corium::fastMillis();
+  if (!corium::dueEvery(now, _poll_at, DRAIN_MS)) return;
+  drain_pcnt();
+}
+
 void GeigerPulse::drain_pcnt() {
-  // caller throttles to 50 Hz
   int16_t n = pcnt_take();
   if (n <= 0) return;
 
-  uint32_t now_us = (uint32_t)micros();
-  uint32_t span_us = now_us - _last_drain_us;
-  if (span_us == 0 || span_us > 1000000UL) span_us = 1000000UL;
-  _last_drain_us = now_us;
+  int64_t now = esp_timer_get_time();
+  uint32_t span = span_us(now, _last_drain_us);
+  _last_drain_us = now;
+  uint32_t now_us = (uint32_t)now;
 
-  portENTER_CRITICAL(&timerMux);
+  corium::IsrLock::enter(timerMux);
   s_event_counter += (uint32_t)n;
-  portEXIT_CRITICAL(&timerMux);
+  corium::IsrLock::leave(timerMux);
 
   _last_blip = now_us;
-  Counter::on_pulse_batch((uint16_t)n, now_us, span_us);
+  _pushed += Counter::on_pulse_batch((uint16_t)n, now_us, span);
 }
 
 int GeigerPulse::collect() {
+  if (!_pcnt) return GeigerInput::collect();
   int16_t residual = pcnt_take();
 
-  uint32_t now_us = (uint32_t)micros();
+  int64_t now = esp_timer_get_time();
+  uint32_t now_us = (uint32_t)now;
 
   if (residual > 0) {
-    uint32_t span_us = now_us - _last_drain_us;
-    if (span_us == 0 || span_us > 1000000UL) span_us = 1000000UL;
-    Counter::on_pulse_batch((uint16_t)residual, now_us, span_us);
+    _pushed += Counter::on_pulse_batch((uint16_t)residual, now_us, span_us(now, _last_drain_us));
     _last_blip = now_us;
   }
-  _last_drain_us = now_us;
+  _last_drain_us = now;
+  uint32_t pushed = _pushed;
+  _pushed = 0;
 
-  portENTER_CRITICAL(&timerMux);
+  corium::IsrLock::enter(timerMux);
   uint32_t pending = s_event_counter;
   s_event_counter = 0;
-  portEXIT_CRITICAL(&timerMux);
+  corium::IsrLock::leave(timerMux);
 
-  return (int)(pending + (uint32_t)residual);
+  uint32_t n = pending + (uint32_t)residual;
+  if (n > STORM_COUNTS) {
+    Counter::drop_pulses(pushed);   // only what this second put in, not n, older ones stay
+    if (!_stormy) corium::Log::console(PSTR("GeigerPulse: PCNT storm (%u/s) - dropped"), (unsigned)n);
+    _stormy = true;
+    return 0;
+  }
+  _stormy = false;
+  return (int)n;
 }
 
 void GeigerPulse::set_pcnt_filter(int val) {
@@ -122,16 +179,18 @@ void GeigerPulse::set_pcnt_filter(int val) {
 }
 
 void GeigerPulse::apply_pcnt_filter() {
+  if (!_pcnt || !_polls) return;   // no unit until begin()
   if (_pcnt_filter > 0) {
     pcnt_set_filter_value(PCNT_UNIT, _pcnt_filter);
     pcnt_filter_enable(PCNT_UNIT);
-    Log::console(PSTR("GeigerPulse: PCNT filter set to %d"), _pcnt_filter);
+    corium::Log::console(PSTR("GeigerPulse: PCNT filter set to %d"), _pcnt_filter);
   } else {
     pcnt_filter_disable(PCNT_UNIT);
-    Log::console(PSTR("GeigerPulse: PCNT filter disabled"));
+    corium::Log::console(PSTR("GeigerPulse: PCNT filter disabled"));
   }
 }
 
+// Plain gpio pull, used in both modes
 void GeigerPulse::set_pin_pull(int mode) {
   gpio_pull_mode_t m;
   const char* name;
@@ -143,10 +202,10 @@ void GeigerPulse::set_pin_pull(int mode) {
   }
   _pin_pull = mode;
   gpio_set_pull_mode((gpio_num_t)_rx_pin, m);
-  if (mode != _pin_pull_last_logged) {
-    Log::console(PSTR("GeigerPulse: PCNT pin pull = %s"), name);
-    _pin_pull_last_logged = mode;
+  if (mode != _pull_logged) {
+    corium::Log::console(PSTR("GeigerPulse: PCNT pin pull = %s"), name);
+    _pull_logged = mode;
   }
 }
 #endif
-#endif // GEIGER_IS_PULSE
+#endif // GEIGER_TYPE_PULSE

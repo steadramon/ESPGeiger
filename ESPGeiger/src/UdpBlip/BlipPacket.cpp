@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "BlipPacket.h"
+#include "Corium/Util/Bytes.h"
 #include <string.h>
 #include <pgmspace.h>
 
@@ -38,10 +39,7 @@ static inline size_t osc_str(uint8_t* buf, size_t cap, size_t off, const char* s
 
 static size_t osc_i32(uint8_t* buf, size_t cap, size_t off, uint32_t v) {
   if (off + 4 > cap) return 0;
-  buf[off    ] = (uint8_t)(v >> 24);
-  buf[off + 1] = (uint8_t)(v >> 16);
-  buf[off + 2] = (uint8_t)(v >>  8);
-  buf[off + 3] = (uint8_t)(v);
+  wrBe32(buf + off, v);
   return 4;
 }
 

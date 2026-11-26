@@ -33,7 +33,7 @@ nav_order: 4
 
 <a href="https://www.tindie.com/stores/espgeiger/?ref=offsite_badges&utm_source=sellers_paulstead&utm_medium=badges&utm_campaign=badge_medium"><img src="https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-mediums.png" alt="I sell on Tindie" width="150" height="78"></a>
 
-ESPGeigerHW is a fully featured, WiFi connected Geiger Counter powered by ESPGeiger.
+ESPGeigerHW is a WiFi connected Geiger counter kit running ESPGeiger.
 
 ## Disclaimer
 
@@ -48,7 +48,7 @@ ESPGeigerHW is a fully featured, WiFi connected Geiger Counter powered by ESPGei
 - 5V power requirements
 - On-board High Voltage boost circuit
 - High Voltage circuit adjustment and feedback
-- OLED display (SSD1305 0.96-inch 128x64)
+- OLED display (SSD1306 0.96-inch 128x64)
 - Integrated status LEDs and audio feedback
 - Open Source firmware
 

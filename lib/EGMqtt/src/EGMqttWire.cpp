@@ -23,9 +23,19 @@
 namespace EGMqttWire {
 
 static const uint16_t STR_MAX = 0xFFFF;
+static const uint8_t FLAGS_02 = 0x02;   // fixed bits PUBREL, SUBSCRIBE, UNSUBSCRIBE carry
+
+// "MQTT", level 4 = 3.1.1
+static const uint8_t NAME_LEVEL[] = { 0, 4, 'M', 'Q', 'T', 'T', 4 };
+
+// CONNECT flags, C_WILL_QOS is a shift
+enum : uint8_t {
+  C_CLEAN = 0x02, C_WILL = 0x04, C_WILL_QOS = 3, C_WILL_RETAIN = 0x20, C_PASS = 0x40, C_USER = 0x80,
+};
 
 // Lengths and headers
 
+// remaining length bytes, 1-4
 static size_t len_bytes(uint32_t n) {
   return n < 128 ? 1 : n < 16384 ? 2 : n < 2097152 ? 3 : 4;
 }
@@ -56,7 +66,7 @@ int header(const uint8_t* in, size_t avail, uint8_t* first, uint32_t* rem) {
   return -1;   // a 5th length byte
 }
 
-// the fixed header, 0 = the whole packet won't fit
+// Writes the fixed header, 0 if the whole packet won't fit
 static size_t start(uint8_t* out, size_t cap, uint8_t first, uint32_t rem) {
   if (rem > LEN_MAX) return 0;
   size_t h = 1 + len_bytes(rem);
@@ -107,14 +117,19 @@ bool utf8_ok(const uint8_t* s, size_t n) {
   return true;
 }
 
+// Same as utf8_ok, or just the no NUL check with EGMQTT_CHECK_TEXT 0
+static bool chars_ok(const void* s, size_t n) {
+  return EGMQTT_CHECK_TEXT ? utf8_ok((const uint8_t*)s, n) : !memchr(s, 0, n);
+}
+
 static bool text_ok(const char* s, size_t* n) {
   if (!s) return false;
   *n = strlen(s);
-  return *n > 0 && *n <= STR_MAX && utf8_ok((const uint8_t*)s, *n);
+  return *n > 0 && *n <= STR_MAX && chars_ok(s, *n);
 }
 
 static bool topic_ok(const char* s, size_t n) {
-  return n && n <= STR_MAX && utf8_ok((const uint8_t*)s, n) &&
+  return n && n <= STR_MAX && chars_ok(s, n) &&
          !memchr(s, '+', n) && !memchr(s, '#', n);
 }
 
@@ -126,6 +141,7 @@ bool topic_ok(const char* s) {
 bool filter_ok(const char* s) {
   size_t n;
   if (!text_ok(s, &n)) return false;
+  if (!EGMQTT_CHECK_TEXT) return true;   // the broker checks the levels
   for (size_t i = 0; i < n; i++) {
     bool level_start = i == 0 || s[i - 1] == '/';
     if (s[i] == '#' && (!level_start || i != n - 1)) return false;
@@ -134,7 +150,7 @@ bool filter_ok(const char* s) {
   return true;
 }
 
-// one level each, both left on the '/' or the end; false = they differ
+// Compares one level of each, leaves both on the '/' or the end. false if they differ
 static bool same_level(const char** f, const char** t) {
   if (**f == '+') {
     (*f)++;
@@ -162,10 +178,10 @@ bool matches(const char* f, const char* t) {
 
 // Building
 
-// a string's 2 + its length onto rem, false = too long or not text
+// Adds a string's 2 + its length to rem, false if too long or not text
 static bool field(const char* s, bool text, uint32_t* rem) {
   size_t n = strlen(s);
-  if (n > STR_MAX || (text && !utf8_ok((const uint8_t*)s, n))) return false;
+  if (n > STR_MAX || (text && !chars_ok(s, n))) return false;
   *rem += 2 + (uint32_t)n;
   return true;
 }
@@ -175,10 +191,10 @@ static bool will_ok(const Connect& c) {
          (c.will_msg || !c.will_len);
 }
 
-// the CONNECT's remaining length, 0 = settings no broker would take
+// Remaining length of the CONNECT, 0 for settings no broker would take
 static uint32_t connect_rem(const Connect& c) {
   const char* id = c.client_id ? c.client_id : "";
-  uint32_t rem = 10;
+  uint32_t rem = sizeof(NAME_LEVEL) + 1 + 2;   // flags, keepalive
   if (!field(id, true, &rem) || (!id[0] && !c.clean)) return 0;
   if (c.will_topic) {
     if (!will_ok(c)) return 0;
@@ -203,11 +219,10 @@ size_t connect(uint8_t* out, size_t cap, const Connect& c) {
   bool user = c.user != nullptr;
   bool pass = c.pass != nullptr;
 
-  uint8_t flags = c.clean ? 0x02 : 0;
-  if (will) flags |= 0x04 | (uint8_t)(c.will_qos << 3) | (c.will_retain ? 0x20 : 0);
-  if (pass) flags |= 0x40;
-  if (user) flags |= 0x80;
-  static const uint8_t NAME_LEVEL[] = { 0, 4, 'M', 'Q', 'T', 'T', 4 };
+  uint8_t flags = c.clean ? C_CLEAN : 0;
+  if (will) flags |= C_WILL | (uint8_t)(c.will_qos << C_WILL_QOS) | (c.will_retain ? C_WILL_RETAIN : 0);
+  if (pass) flags |= C_PASS;
+  if (user) flags |= C_USER;
   uint8_t* p = out + h;
   memcpy(p, NAME_LEVEL, sizeof(NAME_LEVEL));
   p += sizeof(NAME_LEVEL);
@@ -223,9 +238,9 @@ size_t connect(uint8_t* out, size_t cap, const Connect& c) {
   return h + rem;
 }
 
-static bool publish_ok(const Publish& m) {
-  return m.topic && topic_ok(m.topic, m.topic_len) && m.qos <= 2 && (m.id || !m.qos) &&
-         (m.payload || !m.len) && m.len <= LEN_MAX;
+static bool publish_ok(const Publish& p) {
+  return p.topic && topic_ok(p.topic, p.topic_len) && p.qos <= 2 && (p.id || !p.qos) &&
+         (p.payload || !p.len) && p.len <= LEN_MAX;
 }
 
 size_t publish(uint8_t* out, size_t cap, const Publish& m) {
@@ -237,33 +252,35 @@ size_t publish(uint8_t* out, size_t cap, const Publish& m) {
   if (!h) return 0;
   uint8_t* p = put_str(out + h, m.topic, m.topic_len);
   if (m.qos) p = put16(p, m.id);
-  if (m.len) memmove(p, m.payload, m.len);   // may already sit in out, a little higher
+  if (m.len) memmove(p, m.payload, m.len);   // payload may already be in out, a little higher up
   return h + rem;
 }
 
 size_t subscribe(uint8_t* out, size_t cap, uint16_t id, const char* filter, uint8_t qos) {
   if (!id || qos > 2 || !filter_ok(filter)) return 0;
   size_t fn = strlen(filter);
-  size_t h = start(out, cap, (SUBSCRIBE << 4) | 0x02, (uint32_t)(2 + 2 + fn + 1));
+  uint32_t rem = (uint32_t)(2 + 2 + fn + 1);
+  size_t h = start(out, cap, (SUBSCRIBE << 4) | FLAGS_02, rem);
   if (!h) return 0;
   uint8_t* p = put16(out + h, id);
   p = put_str(p, filter, fn);
   *p = qos;
-  return h + 2 + 2 + fn + 1;
+  return h + rem;
 }
 
 size_t unsubscribe(uint8_t* out, size_t cap, uint16_t id, const char* filter) {
   if (!id || !filter_ok(filter)) return 0;
   size_t fn = strlen(filter);
-  size_t h = start(out, cap, (UNSUBSCRIBE << 4) | 0x02, (uint32_t)(2 + 2 + fn));
+  uint32_t rem = (uint32_t)(2 + 2 + fn);
+  size_t h = start(out, cap, (UNSUBSCRIBE << 4) | FLAGS_02, rem);
   if (!h) return 0;
   put_str(put16(out + h, id), filter, fn);
-  return h + 2 + 2 + fn;
+  return h + rem;
 }
 
 size_t ack(uint8_t* out, size_t cap, Type t, uint16_t id) {
   if (t < PUBACK || t > PUBCOMP || !id) return 0;
-  size_t h = start(out, cap, (uint8_t)((t << 4) | (t == PUBREL ? 0x02 : 0)), 2);
+  size_t h = start(out, cap, (uint8_t)((t << 4) | (t == PUBREL ? FLAGS_02 : 0)), 2);
   if (!h) return 0;
   put16(out + h, id);
   return h + 2;
@@ -277,7 +294,7 @@ size_t bare(uint8_t* out, size_t cap, Type t) {
 // Parsing
 
 bool publish_head(uint8_t first, uint16_t topic_len, uint16_t id, size_t n) {
-  uint8_t qos = (first >> 1) & 3;
+  uint8_t qos = qos_of(first);
   if (type_of(first) != PUBLISH || qos == 3 || (!qos && (first & DUP))) return false;
   size_t head = 2 + (size_t)topic_len + (qos ? 2 : 0);
   return topic_len && head <= n && (id || !qos);
@@ -285,13 +302,13 @@ bool publish_head(uint8_t first, uint16_t topic_len, uint16_t id, size_t n) {
 
 bool parse_publish(uint8_t first, const uint8_t* body, size_t n, Publish* p) {
   if (n < 2) return false;
-  uint8_t qos = (first >> 1) & 3;
+  uint8_t qos = qos_of(first);
   uint16_t tn = get16(body);
   size_t head = 2 + (size_t)tn + (qos ? 2 : 0);
   uint16_t id = qos && head <= n ? get16(body + 2 + tn) : 0;
   if (!publish_head(first, tn, id, n)) return false;
   const uint8_t* t = body + 2;
-  if (!utf8_ok(t, tn) || memchr(t, '+', tn) || memchr(t, '#', tn)) return false;
+  if (!chars_ok(t, tn) || memchr(t, '+', tn) || memchr(t, '#', tn)) return false;
   p->topic = (const char*)t;
   p->topic_len = tn;
   p->id = id;
@@ -313,7 +330,7 @@ bool parse_connack(uint8_t first, const uint8_t* body, size_t n, bool* session, 
 bool parse_id(uint8_t first, const uint8_t* body, size_t n, uint16_t* id) {
   Type t = type_of(first);
   bool known = t == PUBACK || t == PUBREC || t == PUBREL || t == PUBCOMP || t == UNSUBACK;
-  uint8_t flags = t == PUBREL ? 0x02 : 0;
+  uint8_t flags = t == PUBREL ? FLAGS_02 : 0;
   if (!known || (first & 0x0F) != flags || n != 2) return false;
   *id = get16(body);
   return *id != 0;
@@ -323,7 +340,7 @@ bool parse_suback(uint8_t first, const uint8_t* body, size_t n, uint16_t* id, ui
   if (first != (SUBACK << 4) || n != 3) return false;   // one filter a subscribe
   *id = get16(body);
   *granted = body[2];
-  return *id && (*granted <= 2 || *granted == 0x80);
+  return *id && (*granted <= 2 || *granted == REFUSED);
 }
 
 bool parse_bare(uint8_t first, size_t n) {

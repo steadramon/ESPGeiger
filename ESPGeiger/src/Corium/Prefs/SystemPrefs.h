@@ -16,23 +16,33 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef SYSTEMPREFS_H
-#define SYSTEMPREFS_H
+#ifndef CORIUM_SYSTEMPREFS_H
+#define CORIUM_SYSTEMPREFS_H
 
-#include "Corium/Module/EGModule.h"
-#include "EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Prefs.h"
 
 #define WEB_PASS_MAX 32
+#define WEB_PASS_MIN 8    // for a new one, blank is still ok
+#define WEB_PASS_SLOT 1   // KeyStore slot, 0 is the key
 
-class SystemPrefs : public EGModule {
+namespace corium {
+class SystemPrefs : public Module {
   public:
     const char* name() override { return PSTR("sys"); }
-    bool core_module() override { return true; }
-    uint8_t display_order() override { return 10; }
-    const EGPrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    bool coreModule() override { return true; }
+    uint8_t displayOrder() override { return 10; }
+    const PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
+    void onPrefsSaved() override;
+    void begin() override;
+    void loop(unsigned long now) override;
+    static bool passRestored;   // FS was lost, web_pass came back from the key store
+    // kept must hold WEB_PASS_MAX + 1
+    static const char* webPass(char* kept);
 };
+}  // namespace corium
 
-extern SystemPrefs sysprefs;
+extern corium::SystemPrefs sysprefs;
 
 #endif

@@ -17,11 +17,17 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef ESPG_LIFECYCLE_H
-#define ESPG_LIFECYCLE_H
+#ifndef CORIUM_LIFECYCLE_H
+#define CORIUM_LIFECYCLE_H
 
 #include <stdint.h>
+#include "App/AppConfig.h"
 
+#ifndef CORIUM_LIFECYCLE_MAX_HANDLERS
+#define CORIUM_LIFECYCLE_MAX_HANDLERS 8
+#endif
+
+namespace corium {
 namespace Lifecycle {
 
 enum Event : uint8_t {
@@ -32,15 +38,22 @@ enum Event : uint8_t {
 
 typedef void (*Handler)(Event);
 
+// Loop task only, handlers run inside send()
 bool on(Handler h);   // false = full
 void send(Event e);
 
-// Main loop does the restart, never mid-write
-void request_restart(uint32_t now, uint32_t delay_ms);
-bool restart_due(uint32_t now);
+// WebPortal::poll does the restart, never mid write. No portal means no restart
+void requestRestart(uint32_t now, uint32_t delay_ms);
+void retryAfter(uint32_t now, uint32_t delay_ms);   // safe mode's retry, waits until an update is done
+bool restartDue(uint32_t now);
+bool restartPending();
 
 }
 
-extern volatile bool ota_in_progress;
+extern bool otaInProgress;
+#ifndef ESP8266
+extern bool otaHeld;   // app1 holds a table move's files, no OTA till it's done
+#endif
+}  // namespace corium
 
 #endif

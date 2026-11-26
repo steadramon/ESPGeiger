@@ -30,11 +30,12 @@
 
 namespace EGTimer1 {
 
+// loop side calls, the NMI does the edges
 bool pwm_begin(uint8_t pin);   // false = can't drive it
-void pwm_set(uint32_t freq, uint32_t duty, uint32_t range);
-void pwm_stop();
+void pwm_set(uint32_t freq, uint32_t duty, uint32_t range);   // Hz, duty out of range
+void pwm_stop();   // pin low, refused until reboot
 bool pwm_running();
-uint32_t entries();
+uint32_t entries();   // NMI count, for a stall check
 void restart();   // when entries() stops moving
 
 // fn runs in the NMI: IRAM only, short, nothing noInterrupts() guards
@@ -43,7 +44,7 @@ void timer_start(uint32_t (*fn)(), uint32_t first);
 void timer_stop();
 
 #ifdef EG_TIMER1_STATS
-void stats_tick();   // bench, once a second
+void stats_tick();   // once a second
 int stats_json(char* buf, size_t cap, uint8_t part);   // 0 past the last part
 #endif
 
@@ -59,10 +60,10 @@ struct RxStats {
   uint32_t ovf;
   uint32_t bytes;
 };
-bool rx_begin(int8_t pin, uint32_t baud);
+bool rx_begin(int8_t pin, uint32_t baud);   // 8N1, pin 0-15, not with pwm
 int rx_available();
-int rx_read();
-void rx_pause();
+int rx_read();     // -1 = empty, loop only
+void rx_pause();   // stops listening, bytes in the ring stay
 void rx_resume();
 void rx_stats(RxStats* out);
 #endif

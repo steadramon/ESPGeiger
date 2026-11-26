@@ -1,5 +1,5 @@
 /*
-  BootGuard.h - three crashes in a row, each before LIVED_S: the next boot runs safe mode.
+  BootGuard.h - safe mode after three quick crashes
 
   Copyright (C) 2026 @steadramon
 
@@ -16,27 +16,39 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef ESPG_BOOTGUARD_H
-#define ESPG_BOOTGUARD_H
+#ifndef CORIUM_BOOTGUARD_H
+#define CORIUM_BOOTGUARD_H
 
 #include <stdint.h>
+#include "App/AppConfig.h"
 
+#ifndef CORIUM_BOOTGUARD_LIVED_S
+#define CORIUM_BOOTGUARD_LIVED_S 600
+#endif
+#ifndef CORIUM_BOOTGUARD_STABLE_MS
+#define CORIUM_BOOTGUARD_STABLE_MS 5000
+#endif
+
+namespace corium {
 namespace BootGuard {
 
-constexpr uint32_t LIVED_S   = 600;    // from begin_all
-constexpr uint32_t STABLE_MS = 5000;   // wifi
+constexpr uint32_t LIVED_S   = CORIUM_BOOTGUARD_LIVED_S;     // counted from beginAll
+constexpr uint32_t STABLE_MS = CORIUM_BOOTGUARD_STABLE_MS;   // wifi up this long before markLived()
 constexpr uint32_t DAY_MS    = 86400000UL;
 
-void on_boot();      // first thing in setup()
-void mark_lived();   // up LIVED_S, a crash after doesn't count
-void mark_day();     // up DAY_MS
-void request_safe();   // safe mode on next restart
+void onBoot();      // First thing in setup()
+void markLived();   // Up LIVED_S, a crash after this doesn't count
+void markDay();     // up DAY_MS, clears the retries
+void scram();       // Safe mode on next restart
+void requestPortal();   // Portal on the next boot if the saved wifi fails
 
-bool     safe_mode();
-bool     entered();       // first safe boot
-uint32_t retry_after();   // ms
-uint8_t  crash_streak();
+bool     safeMode();
+bool     entered();       // true on the first safe boot
+uint32_t retryAfterMs();
+uint8_t  crashStreak();
+bool     portalAsked();
 
 }
+}  // namespace corium
 
 #endif

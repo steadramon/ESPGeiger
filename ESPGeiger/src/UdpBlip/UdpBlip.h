@@ -23,7 +23,7 @@
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
 #include <IPAddress.h>
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 #include "BlipPacket.h"
 
 class WiFiUDP;
@@ -48,6 +48,7 @@ class WiFiUDP;
 #ifndef UDPBLIP_FAIL_BACKOFF
 #define UDPBLIP_FAIL_BACKOFF 8
 #endif
+// click packets: a token per 50 ms, burst of 5
 #ifndef UDPBLIP_CLICK_MIN_INTERVAL_MS
 #define UDPBLIP_CLICK_MIN_INTERVAL_MS 50
 #endif
@@ -55,26 +56,22 @@ class WiFiUDP;
 #define UDPBLIP_CLICK_BURST_TOKENS 5
 #endif
 
-class UdpBlipModule : public EGModule {
+// OSC over udp: clicks as they come, rad/hv/sys/env stats each cycle
+class UdpBlipModule : public corium::Module {
 public:
   static UdpBlipModule& getInstance() {
     static UdpBlipModule instance;
     return instance;
   }
   const char* name() override { return PSTR("udpblip"); }
-  bool requires_wifi() override { return true; }
-  bool has_tick() override { return true; }
-  bool has_loop() override { return true; }
-  uint16_t loop_interval_ms() override;
-  uint16_t warmup_seconds() override { return 0; }
+  bool requiresWifi() override { return true; }
   void begin() override;
-  void s_tick(unsigned long now_s) override;
   void loop(unsigned long now) override;
-  const EGPrefGroup* prefs_group() override;
-  void on_prefs_saved() override;
-  uint8_t display_order() override { return 20; }
-  size_t status_json(char* buf, size_t cap, unsigned long now) override;
-  void notifyClick(unsigned long now_ms);
+  const corium::PrefGroup* prefsGroup() override;
+  void onPrefsSaved() override;
+  uint8_t displayOrder() override { return 20; }
+  size_t statusJson(char* buf, size_t cap) override;
+  void notifyClick(unsigned long now_ms) { tryEmitClick(now_ms); }
 
 private:
   UdpBlipModule() {}
@@ -82,44 +79,44 @@ private:
   void readPrefs();
   void teardown();
   bool ensureUdp();
-  void emitClick(uint32_t counter, uint32_t ts_ms);
-  void tryEmitClick(unsigned long now_ms);
-  void emitRad(uint32_t now);
-  void emitSys(uint32_t now);
-  void emitEnv(uint32_t now);
-#ifdef ESPG_HV_ADC
-  void emitHv(uint32_t now);
-#endif
-  bool sendPacket(const uint8_t* buf, size_t len);
+  void emitClick(uint32_t count, uint32_t ts_ms);
+  bool tryEmitClick(unsigned long now_ms);
+  void due(uint32_t at);
+  void wake(uint32_t at);
+  void schedule(uint32_t now, bool held);
+  void emitRad();
+  void emitSys();
+  void emitEnv();
+  void emitHv();
+  void sendPacket(const uint8_t* buf, size_t len);
   const char* path(const char* suffix);   // suffix flash
   void announce_mdns();
+  void stats(uint32_t now);
+  void drain();
+  void bind(uint32_t now);
 
   WiFiUDP*  _udp = nullptr;
-  uint8_t   _mode = 0;
+  enum : uint8_t { UB_OFF, UB_TELEMETRY, UB_CLICKS };
+  uint8_t   _mode = UB_OFF;
   IPAddress _group;
   uint16_t  _port = 0;
   uint16_t  _src_port = 0;
+  uint16_t  _mdns_port = 0;   // port announced now, 0 = none
   unsigned long _last_clicks = 0;
-  unsigned long _last_click_emit_ms = 0;
-  unsigned long _last_token_ms = 0;
+  uint32_t      _last_token_ms = 0;
   uint32_t _bound_at_ms = 0;            // wifi session, rebind on change
-  uint16_t      _stats_ticks = 0;      // s
-  uint16_t      _backoff_ticks = 0;    // s
-  uint8_t       _burst_tokens = UDPBLIP_CLICK_BURST_TOKENS;
+  uint32_t _stats_at = 0;
+  uint32_t _skipped = 0;                // sends not made or failed
+  uint32_t _wake_at = 0;                // last dueAt asked
+  corium::Deadline _backoff;
+  uint16_t _jitter_ms = 0;
+  uint8_t       _tokens = UDPBLIP_CLICK_BURST_TOKENS;
   uint8_t   _fail_count = 0;
   bool      _mdns_done = false;
   bool      _sys_phase = false;
   uint8_t   _emit_phase = 0;
-  // s_tick sets, loop() sends
-  static constexpr uint8_t EMIT_RAD = 1 << 0;
-  static constexpr uint8_t EMIT_HV  = 1 << 1;
-  static constexpr uint8_t EMIT_SYS = 1 << 2;
-  static constexpr uint8_t EMIT_ENV = 1 << 3;
-  static constexpr uint8_t BIND     = 1 << 4;
-  static constexpr uint8_t REBIND   = 1 << 5;
-  uint8_t   _pending = 0;
-  uint8_t   _click_packet[BLIP_CLICK_LEN] = {0};
-  char      _path[BLIP_ARGS_AT] = {0};   // "/espg/<id>/" then the suffix
+  uint8_t   _click_packet[BLIP_CLICK_LEN] = {};
+  char      _path[BLIP_ARGS_AT] = {};   // "/espg/<id>/" then the suffix
 };
 
 extern UdpBlipModule& udpblip;

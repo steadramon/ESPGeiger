@@ -23,9 +23,10 @@
 #include "Corium/Platform/Flash.h"
 #include "Corium/System/DeviceInfo.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Net/EGHttpPoster.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Net/HttpPoster.h"
+#include "Corium/Prefs/Prefs.h"
 
+// s between POSTs
 #ifndef WEBHOOK_INTERVAL_MIN
 #define WEBHOOK_INTERVAL_MIN 10
 #endif
@@ -36,27 +37,26 @@
 #define WEBHOOK_INTERVAL 60
 #endif
 
-class Webhook : public EGHttpPoster {
+class Webhook : public corium::HttpPoster {
   public:
     Webhook();
     const char* name() override { return PSTR("whook"); }
-    void on_prefs_loaded() override;
-    const EGPrefGroup* prefs_group() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    void onPrefsLoaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    corium::LegacyRows legacyAliases() override;
     void setInterval(int interval);
-    int getInterval() { return pingInterval; }
-    const char* cleanHTTP(const char* url);
+    int getInterval() { return _interval_s; }
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;
-    const char* log_tag() override { return PSTR("Webhook"); }
-    const char* status_key() override { return PSTR("webhook"); }
-    const char* method() const override { return "POST"; }  // NOLINT(dram)
-    uint16_t timeout_s() const override { return 10; }
-    size_t reply_cap() const override { return 128; }
-    void add_headers(EGHttpClient* r) override;
+    const char* logTag() override { return PSTR("Webhook"); }
+    const char* statusKey() override { return PSTR("webhook"); }
+    const char* method() const override { return "POST"; }
+    uint16_t timeoutS() const override { return 10; }
+    size_t replyCap() const override { return 128; }
+    PGM_P contentType() const override;
   private:
-    uint16_t pingInterval = WEBHOOK_INTERVAL;
+    uint16_t _interval_s = WEBHOOK_INTERVAL;
 };
 
 extern Webhook webhook;

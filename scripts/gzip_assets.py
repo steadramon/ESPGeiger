@@ -1,21 +1,7 @@
 #!/usr/bin/env python3
-# Pre-compress immutable JS/CSS assets at build time.
-#
-# ASSETS = single-symbol assets. The R"DELIM(...)DELIM" body of the named
-# PROGMEM symbol is extracted, gzipped, emitted as <SYM>.gz.h with:
-#   static const uint8_t SYM_GZ[] PROGMEM = { ... };
-#   static const size_t  SYM_GZ_LEN = ...;
-#   #define EG_GZ_<SYM> 1
-#
-# ASSETS_COMBINED = multi-source bundles. Source bodies are concatenated
-# in list order, then gzipped as a single stream (browsers don't reliably
-# handle RFC 1952 multi-member gzip; one stream is mandatory).
-#
-# Per-asset fallback: an unexpected failure writes the header with
-# EG_GZ_<NAME> 0 and consumers fall through to the raw R"..." path, so a
-# surprise here never breaks the build.
-#
-# Missing file or symbol is a build error, EG_GZ_ALLOW_STALE=1 for raw
+# gzip JS/CSS assets at build time, <SYM>.gz.h each: SYM_GZ[], SYM_GZ_LEN, EG_GZ_<SYM> 1
+# ASSETS_COMBINED: bodies joined in order, one gzip stream
+# any failure fails the build; EG_GZ_ALLOW_STALE=1 for raw (EG_GZ_<NAME> 0)
 
 import gzip
 import io
@@ -24,23 +10,40 @@ import re
 import sys
 
 ASSETS = [
-    ("ESPGeiger/src/Corium/NTP/NTP.cpp",          "NTP_PAGE_JS", "application/javascript"),
-    ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "STYLE_CSS", "text/css"),
-    ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "THEME_JS",  "application/javascript"),
+    ("ESPGeiger/src/Corium/WebPortal/NtpPage.cpp", "NTP_PAGE_JS", "application/javascript"),
+    ("ESPGeiger/src/Corium/WebPortal/ParamPage.cpp", "PARAM_PAGE_JS", "application/javascript"),
+    ("ESPGeiger/src/Corium/WebPortal/UpdatePage.cpp", "UPDATE_PAGE_JS", "application/javascript"),
     ("ESPGeiger/src/Counter/CounterWeb.cpp",      "HIST_JS",     "application/javascript"),
     ("ESPGeiger/src/Display/Display.cpp",         "screenJS",    "application/javascript"),
+    ("ESPGeiger/src/App/AppWeb.cpp",              "picographJS", "application/javascript"),
+    ("ESPGeiger/src/GRNG/GRNGWeb.cpp",            "RANDOM_JS",   "application/javascript"),
 ]
 
 ASSETS_COMBINED = [
+    ("STYLE_CSS", [
+        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "STYLE_CSS"),
+        ("ESPGeiger/src/App/AppWeb.cpp",              "APP_CSS"),
+    ], "text/css"),
+    ("THEME_JS", [
+        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "THEME_JS"),
+        ("ESPGeiger/src/App/AppWeb.cpp",              "APP_THEME_JS"),
+    ], "application/javascript"),
+    # esp8266 has 5 sockets: the graph lib rides in /js and /hvjs, no /pgjs
     ("JS_BUNDLE", [
-        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "picographJS"),
+        ("ESPGeiger/src/App/AppWeb.cpp",              "picographJS", "espressif8266"),
+        ("ESPGeiger/src/Counter/CounterWeb.cpp",      "cmdJS"),
         ("ESPGeiger/src/Counter/CounterWeb.cpp",      "statusJS"),
     ], "application/javascript"),
     ("HVJS_BUNDLE", [
-        ("ESPGeiger/src/Corium/WebPortal/WebPortal.cpp", "picographJS"),
+        ("ESPGeiger/src/App/AppWeb.cpp",              "picographJS", "espressif8266"),
         ("ESPGeiger/src/HV/HV.cpp",               "hvJS"),
     ], "application/javascript"),
 ]
+
+
+# a third field = that platform only
+def for_platform(parts, platform):
+    return [p[:2] for p in parts if len(p) == 2 or p[2] == platform]
 
 # [extern|static] const char NAME[] PROGMEM = R"DELIM( ... )DELIM";
 RAW_RE_TMPL = (
@@ -65,6 +68,17 @@ def extract_raw(src_path, rel_path, sym):
     if not m:
         raise StaleAsset(f"{sym}: symbol not found in {rel_path}")
     return m.group(2).encode("utf-8")
+
+
+def squeeze(raw, ctype):
+    # line indent and blank lines only, never inside a string
+    lines = [ln.strip() for ln in raw.decode("utf-8").split("\n")]
+    if any(ln.endswith("\\") or ln.count("`") % 2 for ln in lines):
+        return raw
+    text = "\n".join(ln for ln in lines if ln)
+    if ctype == "text/css":
+        text = text.replace("}\n", "}")
+    return text.encode("utf-8")
 
 
 def gzip_bytes(payload):
@@ -103,10 +117,11 @@ def emit_header(out_path, name, ok, blob=None, raw_len=0):
         f.write(new_text)
 
 
-def process_single(project_dir, gen_dir, rel_path, sym):
+def process_single(project_dir, gen_dir, rel_path, sym, ctype):
     out_path = os.path.join(gen_dir, f"{sym}.gz.h")
     try:
-        raw = extract_raw(os.path.join(project_dir, rel_path), rel_path, sym)
+        raw = squeeze(extract_raw(os.path.join(project_dir, rel_path),
+                                  rel_path, sym), ctype)
         blob = gzip_bytes(raw)
         emit_header(out_path, sym, ok=True, blob=blob, raw_len=len(raw))
         print(f"[gzip_assets] {sym}: {len(raw)} -> {len(blob)} B "
@@ -115,20 +130,16 @@ def process_single(project_dir, gen_dir, rel_path, sym):
     except StaleAsset:
         emit_header(out_path, sym, ok=False)
         raise
-    except Exception as e:
-        print(f"[gzip_assets] {sym}: {e}; raw fallback")
-        emit_header(out_path, sym, ok=False)
-        return 0, 0
 
 
-def process_combined(project_dir, gen_dir, name, parts):
+def process_combined(project_dir, gen_dir, name, parts, ctype):
     out_path = os.path.join(gen_dir, f"{name}.gz.h")
     try:
         chunks = []
         for rel_path, sym in parts:
             chunks.append(extract_raw(
                 os.path.join(project_dir, rel_path), rel_path, sym))
-        raw = b"".join(chunks)
+        raw = squeeze(b"".join(chunks), ctype)
         blob = gzip_bytes(raw)
         emit_header(out_path, name, ok=True, blob=blob, raw_len=len(raw))
         print(f"[gzip_assets] {name} ({'+'.join(s for _, s in parts)}): "
@@ -137,13 +148,9 @@ def process_combined(project_dir, gen_dir, name, parts):
     except StaleAsset:
         emit_header(out_path, name, ok=False)
         raise
-    except Exception as e:
-        print(f"[gzip_assets] {name}: {e}; raw fallback")
-        emit_header(out_path, name, ok=False)
-        return 0, 0
 
 
-def run(project_dir, gen_dir):
+def run(project_dir, gen_dir, platform=""):
     os.makedirs(gen_dir, exist_ok=True)
     total_raw = 0
     total_gz = 0
@@ -159,10 +166,10 @@ def run(project_dir, gen_dir):
         total_raw += r
         total_gz += g
 
-    for rel_path, sym, _ct in ASSETS:
-        collect(process_single, rel_path, sym)
-    for name, parts, _ct in ASSETS_COMBINED:
-        collect(process_combined, name, parts)
+    for rel_path, sym, ct in ASSETS:
+        collect(process_single, rel_path, sym, ct)
+    for name, parts, ct in ASSETS_COMBINED:
+        collect(process_combined, name, for_platform(parts, platform), ct)
     if total_raw:
         print(f"[gzip_assets] total {total_raw} -> {total_gz} B "
               f"(saved {total_raw - total_gz} B)")
@@ -179,16 +186,15 @@ def run(project_dir, gen_dir):
             f"the path/symbol, or set EG_GZ_ALLOW_STALE=1 to ship raw.")
 
 
-# PIO entry point: pre-script invoked from platformio.ini.
 try:
-    Import("env")  # type: ignore  # noqa: F821
-    _project_dir = env["PROJECT_DIR"]  # type: ignore  # noqa: F821
-    _build_dir = env.subst("$BUILD_DIR")  # type: ignore  # noqa: F821
+    Import("env")
+    _project_dir = env["PROJECT_DIR"]
+    _build_dir = env.subst("$BUILD_DIR")
     _gen_dir = os.path.join(_build_dir, "generated")
-    run(_project_dir, _gen_dir)
-    env.Append(CPPPATH=[_gen_dir])  # type: ignore  # noqa: F821
+    run(_project_dir, _gen_dir, env.get("PIOPLATFORM", ""))
+    env.Append(CPPPATH=[_gen_dir])
 except NameError:
     if __name__ == "__main__":
         # CLI fallback: python scripts/gzip_assets.py <gen_dir>
-        gen = sys.argv[1] if len(sys.argv) > 1 else "build_test/generated"
+        gen = sys.argv[1] if len(sys.argv) > 1 else ".pio/generated"
         run(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), gen)

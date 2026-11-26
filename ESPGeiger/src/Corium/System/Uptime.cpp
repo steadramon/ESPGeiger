@@ -19,4 +19,5 @@
 
 #include "Uptime.h"
 
-UptimeCounter Uptime::counter;
+corium::UptimeCounter corium::Uptime::counter;
+long corium::Uptime::start = 0;

@@ -10,21 +10,27 @@ nav_order: 10
 
 ![Img](../img/OLEDExample.png)
 
+# Display type
+
+OLED builds drive 128x64 panels (SSD1306, SH1106 1.3in, SSD1309), 128x32 SSD1306 panels and, on ESP32 builds, 72x40 "Tiny" panels. Pick yours with **Display type** (`display.type`, `9` for 128x32) on the [Config page](/configuration#display-settings-oled-builds) and restart. The list shows only the types the build has; a build with one type has no setting.
+
 # Display behaviour
 
 Three settings in the **Display** section of the [Config page](/configuration#display-settings-oled-builds) control when the OLED is on:
 
-- **Timeout** *(push-button builds only)* - seconds of inactivity before the display turns off after a tap. `0` falls back to the On/Off Time schedule below.
-- **On Time / Off Time** - daily schedule; outside the window the display is off. Leave both blank for "always on". Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`).
+- **Idle time (s)** *(push-button builds only)* - seconds of inactivity before the display turns off after a tap. `0` falls back to the On/Off time schedule below.
+- **On time / Off time** - daily schedule; outside the window the display is off. Leave both blank for "always on". Window crosses midnight if `from > to` (e.g. `22:00`-`07:00`).
 - **Brightness** - 0-100 %.
+
+On page 1 a warning sign left of the CPM shows the warning level is reached; at the alert level the sign sits in a white box.
 
 On builds **without** a push button, only the schedule applies.
 
 On builds **with** a push button, the resolution order is:
 
-1. Long-press override active → display always on.
-2. Otherwise, if Timeout > 0 → on for Timeout seconds after each tap.
-3. Otherwise (Timeout = 0) → follow On/Off Time schedule, with a 30-second wake window after any tap so you can check readings during off-hours.
+1. Long-press override active: display always on.
+2. Otherwise, if Idle time > 0: on for Idle time seconds after each tap.
+3. Otherwise (Idle time = 0): follow the On/Off time schedule, with a 30-second wake window after any tap so you can check readings during off-hours.
 
 # Push-button operations
 
@@ -32,15 +38,17 @@ On builds **with** a push button, the resolution order is:
 
 Cycles through the information pages. If the display is off, the first tap turns it on and shows page 1.
 
+On builds with an SD card or HV, a fault puts one line on the screen: *SD card error* (the card failed or is full, not a card missing at boot) or *HV fault*. It stays until a press, and that press only clears it. The fault wakes the display, but not in the off hours of the On/Off schedule: it shows at the next wake.
+
 ## Long press
 
-Toggles the always-on override. Long-press once to keep the display on; long-press again to return to the Timeout and schedule.
+Toggles the always-on override. Long-press once to keep the display on; long-press again to return to the Idle time and schedule.
 
 The screen shows **Screen always on** or **Screen auto off** for a moment. The status LED gives one long pulse for always on, two short blinks for auto off.
 
 # Pin configuration
 
-Set **I2C SDA Pin** and **I2C SCL Pin** on the Display section of the Config page, then reboot. Not shown on kits with fixed pins.
+Set **SDA pin** and **SCL pin** in the **I2C Bus** section of the Config page (System tab), then restart. Not shown on kits with fixed pins.
 
 # Browser screen viewer
 
@@ -49,6 +57,6 @@ Open **`/screen`** to see a live copy of the display in your browser, with a but
 | Path | Returns | Use |
 |---|---|---|
 | `/screen` | HTML viewer page | Interactive view in the browser |
-| `/screen.bin` | Raw framebuffer | Scripting (column-packed, 1 bit per pixel) |
+| `/screen.bin` | 4 byte header (width, height, 16-bit little-endian) then the framebuffer | Scripting (column-packed pages, 1 bit per pixel) |
 | `/screen.bmp` | Monochrome BMP image | One-shot screenshot |
-| `/screen/tap` | `OK` | Virtual short press of the user button (push-button builds) |
+| `/screen/tap` | `ok` | Virtual short press of the user button (push-button builds), snoozes an alarm as the button does |

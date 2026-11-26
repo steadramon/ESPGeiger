@@ -21,24 +21,24 @@
 #define COUNTER_H
 #include <Arduino.h>
 #include <CircularBuffer.hpp>
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/Util/EGSmoothed.h"
 #include "Corium/Output/QuietWindow.h"
+#include "Corium/Module/Registry.h"
+#include "App/Topics.h"
 
 #include "GeigerInput/GeigerInput.h"
 #include "Corium/System/FastMillis.h"
-
-#if defined(USE_PCNT) && !GEIGER_IS_SERIAL(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
-  #define COUNTER_DRAINS_PCNT
-#endif
+#include "Corium/System/Uptime.h"
 
 class GeigerUdpRx;
 
+// Tube dead time in us
 #ifndef GEIGER_DEAD_TIME_US
   #define GEIGER_DEAD_TIME_US 100
 #endif
 
-// before CounterMaths.h
+// has to come before CounterMaths.h is included
 #if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
   #define GEIGER_DEAD_TIME_DEFAULT GEIGER_DEAD_TIME_US
 #else
@@ -47,19 +47,30 @@ class GeigerUdpRx;
 
 #include "CounterMaths.h"
 
+// Max number of 1 s buckets in the CPM window
 #define GEIGER_CPM_COUNT 60
+
+// us = micros() of the blip
+typedef void (*ClickFn)(uint32_t us);
+
+// Click hooks, added in begin() and fired from loop()
+struct ClickFns {
+  static constexpr uint8_t MAX = 8;
+  ClickFn fn[MAX];
+  uint8_t n = 0;
+  bool add(ClickFn f);   // false = full
+  void fire(uint32_t us) const;
+};
 
 class Counter : public CounterMaths {
     public:
       Counter();
       void loop();
       float get_cps();
-      int get_last_cps() const { return (int)geigerTicks.last(); }
+      int get_last_cps() const { return (int)_ticks.last(); }
       int get_cpm();
       float get_cpmf();
-      float get_cps_stable()  const { return _cached_cps; }
       float get_cpmf_stable() const { return _cached_cps * 60.0f; }
-      int   get_cpm_stable()  const { return (int)roundf(_cached_cps * 60.0f); }
       float get_usv_stable()  const { return _cached_cps * 60.0f * _ratio_inv; }
       int get_cpm5();
       float get_cpm5f();
@@ -68,78 +79,95 @@ class Counter : public CounterMaths {
       float get_usv();
       float get_usv5();
       bool  get_tube_alive();
-      // soft-float, gate inline
+      // Uses soft-float, callers do the cheap check first
       bool  counts_missing();
       // keep out of line
       int input_pin();
       bool  get_saturated();
-      float    get_cps_live();      // (N-1)/T, 0 if N<2
+      float    get_cps_live(uint16_t min_n = 2);   // (N-1)/T from the oldest to now, 0 if fewer than min_n
       uint16_t get_cps_n();
       uint32_t get_cps_win_us();
       uint32_t get_min_pulse_us();
-      static void IRAM_ATTR on_pulse(uint32_t now_us);
-      static void on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
-      // 0=auto 1=live 2=60s 3=bucket 4=fast
+      // Called from the ISR
+      static void CORIUM_ISR_ATTR on_pulse(uint32_t now_us);
+      // spread over span_us, last at end_us
+      static uint16_t on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us);
+      // Takes back the pulses of a junk second
+      static void drop_pulses(uint32_t n);
+      // Same order as the pref options
+      enum : uint8_t { CPM_FAST_START, CPM_LIVE, CPM_60S, CPM_BUCKET, CPM_FAST };
       void    set_cpm_mode(uint8_t m);
-      uint8_t get_cpm_mode() const { return _cpm_mode; }
       bool blip_led();
       void begin();
+      // Once a second, from the Reactor tick
       void secondticker(uint32_t uptime_s);
       void set_cpm_window(uint8_t n) {
-        if (n < 1) n = 1;
-        if (n > GEIGER_CPM_COUNT) n = GEIGER_CPM_COUNT;
         _cpm_window = n;
         _cpm_window_inv = 1.0f / (float)n;
         _warm_cached = false;
       }
-      uint8_t get_cpm_window() const { return _cpm_window; }
       bool is_warm() const;
+      // seconds since counting started
+      uint32_t run_s() const {
+        long s = corium::Uptime::start;
+        return s > 0 ? (uint32_t)corium::Uptime::seconds() - (uint32_t)(s - 1) : 0;
+      }
       void set_rx_pin(int pin) {
-        geigerinput->set_rx_pin(pin);
+        _input->set_rx_pin(pin);
       };
       void set_tx_pin(int pin) {
-        geigerinput->set_tx_pin(pin);
+        _input->set_tx_pin(pin);
       };
       int get_rx_pin() {
-        return geigerinput->get_rx_pin();
+        return _input->get_rx_pin();
       };
       int get_tx_pin() {
-        return geigerinput->get_tx_pin();
+        return _input->get_tx_pin();
       };
       void set_pcnt_filter(int val) {
-        geigerinput->set_pcnt_filter(val);
+        _input->set_pcnt_filter(val);
       };
       void set_debounce(int val) {
-        geigerinput->set_debounce(val);
+        _input->set_debounce(val);
       };
       void apply_pcnt_filter() {
-        geigerinput->apply_pcnt_filter();
+        _input->apply_pcnt_filter();
       };
       void set_pin_pull(int mode) {
-        geigerinput->set_pin_pull(mode);
+        _input->set_pin_pull(mode);
       };
       bool has_pcnt() {
-        return geigerinput->has_pcnt();
+        return _input->has_pcnt();
       };
-      void set_warning(int val);
-      void set_alert(int val);
+      void set_warning(int val) { _cpm_warning = val; }
+      void set_alert(int val) { _cpm_alert = val; }
+      int get_warning() const { return _cpm_warning; }
+      int get_alert() const { return _cpm_alert; }
       void set_blip_led(bool on) { _blip_led = on; }
       void set_blip_brightness(uint8_t level);
       void set_quiet_hours(const char* from, const char* to);
       bool is_quiet_now();
-      bool is_warning() const { return _bool_cpm_warning; }
-      bool is_alert() const { return _bool_cpm_alert; }
-      bool is_healthy() const { return geigerinput && geigerinput->isHealthy(); }
-      GeigerInput* input() { return geigerinput; }
+      bool is_warning() const { return _warn_on; }
+      bool is_alert() const { return _alert_on; }
+      bool is_snoozed() const { return _alarm_snoozed; }   // until the level drops below warning
+      // Sent from loop() when warn, alert, warm or the snooze changes
+      static constexpr uint8_t TOPIC_ALARM = Topic::ALARM;
+      // sent from loop() once a second
+      static constexpr uint8_t TOPIC_COUNTS = Topic::COUNTS;
+      bool is_healthy() const { return _input && _input->isHealthy(); }
+      GeigerInput* input() { return _input; }
+      // Web OTA keeps the second ticker going, stop so it doesn't log a run of zero seconds
       void stop_for_ota() {
-        if (_lifetime_enabled) save_lifetime();
-        if (geigerinput) geigerinput->stopForOTA();
+        _running = false;
+        if (_lifetime_enabled) (void)save_lifetime();
+        if (_input) _input->stopForOTA();
       }
       void restart_after_ota() {
-        if (geigerinput) geigerinput->restartAfterOTA();
+        if (_input) _input->restartAfterOTA();
+        _running = true;
       }
       unsigned long last_blip() {
-        return geigerinput->last_blip();
+        return _input->last_blip();
       }
       void reset_alarm();
 #if GEIGER_IS_TEST(GEIGER_TYPE)
@@ -148,51 +176,39 @@ class Counter : public CounterMaths {
 #if GEIGER_TYPE == GEIGER_TYPE_UDPRX
       GeigerUdpRx* udp_rx();
 #endif
-      void queueBlip() { _last_blip = micros(); }
 
-      // inline gate
-      inline bool needs_loop() {
-#if GEIGER_IS_TEST(GEIGER_TYPE) && !GEIGER_IS_SERIAL(GEIGER_TYPE) && !defined(GEIGER_COUNTS_IN_ISR)
-        return true;   // drains every pass anyway
-#else
-        if (_pending_work) return true;
-  #ifdef GEIGER_COUNTS_IN_ISR
-        return _last_blip_seen != _last_blip;
-  #else
-        if (!_running) return false;
-        if (_last_blip_seen != _last_blip) return true;
-    #ifdef COUNTER_DRAINS_PCNT
-        return (uint32_t)(fast_millis() - _pcnt_ms) >= PCNT_DRAIN_MS;
-    #else
-        return geigerinput->poll_due();
-    #endif
-  #endif
-#endif
+      void ota_hold(bool on) { _ota = on; }
+      // Runs every loop pass. Members only, a global costs an extra l32r
+      inline bool needs_loop(uint32_t now) {
+        return !_ota && (_pending_work || _last_blip_seen != _last_blip || _input->due(now));
       }
-      // direct, polling merges blips
+      // Called direct, polling would merge blips that land close together
       void dispatchReceiverBlip();
-      unsigned long clicks_hour = 0;
-      unsigned long total_clicks_rollover = 0;
-      unsigned long total_clicks = 0;
-      unsigned long clicks_today = 0;
-      unsigned long clicks_yesterday = 0;
-      unsigned long total_clicks_lifetime = 0;
-      unsigned long total_clicks_lifetime_rollover = 0;
+      bool on_click(ClickFn f) { return _clicks.add(f); }
+      // UDP receiver clicks, these aren't echoed back out
+      bool on_rx_click(ClickFn f) { return _rx_clicks.add(f); }
+      uint32_t clicks_hour = 0;
+      uint32_t total_clicks_rollover = 0;
+      uint32_t total_clicks = 0;
+      uint32_t clicks_today = 0;
+      uint32_t clicks_yesterday = 0;
+      uint32_t total_clicks_lifetime = 0;
+      uint32_t total_clicks_lifetime_rollover = 0;
       void set_lifetime_enabled(bool on) { _lifetime_enabled = on; }
       bool get_lifetime_enabled() const { return _lifetime_enabled; }
-      void set_lifetime_clicks(unsigned long v) { total_clicks_lifetime = v; }
-      void set_lifetime_rollover(unsigned long v) { total_clicks_lifetime_rollover = v; }
+      void set_lifetime_clicks(uint32_t v) { total_clicks_lifetime = v; }
+      void set_lifetime_rollover(uint32_t v) { total_clicks_lifetime_rollover = v; }
       uint64_t get_lifetime_clicks_total() const {
         return ((uint64_t)total_clicks_lifetime_rollover << 32) + total_clicks_lifetime;
       }
       void set_first_boot_ts(uint32_t v) { _first_boot_ts = v; }
       uint32_t get_first_boot_ts() const { return _first_boot_ts; }
-      void set_lifetime_seconds(unsigned long v) { _lifetime_seconds_saved = v; }
+      void set_lifetime_seconds(unsigned long v) { _life_saved_s = v; }
       unsigned long get_lifetime_seconds() const;
-      void save_lifetime();
-      void reset_lifetime();
+      bool save_lifetime();
+      bool reset_lifetime();
       void clock_stepped(int32_t delta_s);
-      const uint32_t* pulse_histogram() const { return _pulse_hist; }
+      void pulse_histogram(uint32_t* out) const;   // a copy under the lock
       static constexpr uint8_t pulse_histogram_buckets() { return HIST_BUCKETS; }
       CircularBuffer<int,45> cpm_history;
       CircularBuffer<uint16_t,45>* cpm5_history = nullptr;   // tenths
@@ -202,59 +218,73 @@ class Counter : public CounterMaths {
       uint16_t _cpm5_x10 = 0;
       void push_cpm5(bool fresh);
       struct RingSnapshot {
+        uint32_t now_us;
         uint32_t newest_us;
         uint32_t oldest_us;
         uint16_t count;
       };
       bool snapshot_ring(RingSnapshot& s) const;
       float cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const;
-      void note_counts_missing(uint32_t uptime_s);
-      void hour_rollover(time_t now);
-      void lifetime_tick(int counts, time_t now);
+      void note_counts_missing(uint32_t run);
+      void note_health();
+      void second_work();
+      void hour_rollover(time_t t);
+      uint32_t clock_read();
+      void lifetime_tick(int counts);
+      void life_work();
+      void cpm_work(bool fresh);
+      void ema_work(bool add15);
+      bool ema_tick();
       void update_alarms(int cpm);
-      uint16_t _boundary_secs = 3600;
-      uint8_t _cpm_mode = 3;     // bucket
+      void run_pending();
+      uint16_t _boundary_s = 3600;
+      uint8_t _cpm_mode = CPM_BUCKET;
       unsigned long _last_blip_seen = 0;
-      uint32_t _last_count_up_s = 0;   // 0 = none since boot
+      uint32_t _last_count_up_s = 0;   // since counting started, 0 = none yet
       static uint32_t _pulse_hist[HIST_BUCKETS];
       uint32_t _prev_blip_us = 0;
       bool     _hist_primed  = false;
-      int _cpm_warning = 50;
-      int _cpm_alert = 100;
-      bool _bool_cpm_warning = false;
-      bool _bool_cpm_alert = false;
+      int _cpm_warning = GEIGER_WARN_CPM;
+      int _cpm_alert = GEIGER_ALERT_CPM;
+      bool _warn_on = false;
+      bool _alert_on = false;
       bool _alarm_snoozed = false;
       bool _blip_led = true;
       bool _lifetime_enabled = true;
       bool _running = false;
-      static constexpr uint8_t PENDING_RTC  = 1 << 0;
-      static constexpr uint8_t PENDING_SAVE = 1 << 1;
+      bool _ota = false;   // member so needs_loop() doesn't load a global
+      static constexpr uint8_t PENDING_RTC   = 1 << 0;
+      static constexpr uint8_t PENDING_SAVE  = 1 << 1;
+      static constexpr uint8_t PENDING_ALARM = 1 << 2;
+      static constexpr uint8_t PENDING_COUNTS = 1 << 3;
+      static constexpr uint8_t PENDING_SECOND = 1 << 4;
       uint8_t  _pending_work = 0;
-#ifdef COUNTER_DRAINS_PCNT
-      static constexpr uint32_t PCNT_DRAIN_MS = 20;   // 50 Hz
-      uint32_t _pcnt_ms = 0;
-#endif
-      uint32_t _rtc_pending_now = 0;
+      uint8_t  _secs_due = 0;   // seconds still to work, a stalled loop catches up on each
+      uint32_t _second_up = 0;
+      uint32_t _sec_counts = 0;
+      uint8_t  _alarm_bits = 0;   // warn, alert, warm as last emitted
       uint32_t _first_boot_ts = 0;
-      uint32_t _rtc_unsaved_clicks = 0;
-      unsigned long _lifetime_seconds_saved = 0;
-      uint32_t      _last_save_time_t = 0;
+      unsigned long _life_saved_s = 0;
       uint8_t _cpm_window = GEIGER_CPM_COUNT;
       float   _cpm_window_inv = 1.0f / (float)GEIGER_CPM_COUNT;
       mutable bool _warm_cached = false;
-      QuietWindow _quiet;
+      corium::QuietWindow _quiet;
       float _cached_cps = 0.0f;
       float _cached_cpm_active = 0.0f;
-      EGRingAvg<float, GEIGER_CPM_COUNT> geigerTicks;
+      int   _cached_ccpm = 0;
+      CpsInputs _cps_in;
+      EGRingAvg<uint32_t, GEIGER_CPM_COUNT> _ticks;   // counts, exact sum
 #ifdef GEIGER_SMOOTH_AVG
-      EGRingAvg<float, GEIGER_CPM5_COUNT>  geigerTicks5;
-      EGRingAvg<float, GEIGER_CPM15_COUNT> geigerTicks15;
+      EGRingAvg<float, GEIGER_CPM5_COUNT>  _ticks5;
+      EGRingAvg<float, GEIGER_CPM15_COUNT> _ticks15;
 #else
-      EGEma<float> geigerTicks5;
-      EGEma<float> geigerTicks15;
+      EGEma<float> _ticks5;
+      EGEma<float> _ticks15;
 #endif
-      // static_casts rely on GEIGER_TYPE
-      GeigerInput* geigerinput;
+      // The static_casts rely on GEIGER_TYPE
+      GeigerInput* _input;
+      ClickFns _clicks;
+      ClickFns _rx_clicks;
 };
 
 extern Counter gcounter;

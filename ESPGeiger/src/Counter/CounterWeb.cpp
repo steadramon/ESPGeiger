@@ -1,8 +1,7 @@
 /*
   CounterWeb.cpp - Counter HTTP routes (/json, /clicks, /hist, /pause, ...)
 
-  Split from Counter.cpp: request-cold code kept out of the TU that holds
-  the hot counting loop (icache locality).
+  Request-cold code, kept out of the counting TU (icache)
 
   Copyright (C) 2023 @steadramon
 
@@ -23,108 +22,90 @@
 #include <EGHttpServer.h>
 #include <EGJson.h>
 #include "Counter.h"
-#include "Corium/Module/ExternalPause.h"
-#include "Corium/Measure/EGMeasure.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Console/Console.h"
+#include "App/AppKeys.h"
+#include "App/ExternalPause.h"
+#include "App/MeasureIds.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/Util/Words.h"
 #include "Corium/System/Clock.h"
 #include "Corium/System/Uptime.h"
 #include "Corium/WebPortal/WebPortal.h"
+#include "Corium/Platform/Chip.h"
 #include "HIST_JS.gz.h"
 #include "JS_BUNDLE.gz.h"
-#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+#if CORIUM_HAS_TIMER1 && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
 #include <EGTimer1.h>
 #endif
 
 namespace CounterRoutes { void registerRoutes(EGHttpServer& http); }
 
-extern const char picographJS[] PROGMEM;
 extern const char statusJS[]    PROGMEM;
+#if CORIUM_HAS_FEW_SOCKETS
+extern const char picographJS[] PROGMEM;
+#endif
 
-// no %llu in nano libc
-static void fmt_u64(char* out, size_t cap, uint64_t v) {
-  char digits[24];
-  int n = 0;
-  if (v == 0) { digits[n++] = '0'; }
-  else { while (v > 0 && n < (int)sizeof(digits)) { digits[n++] = (char)('0' + v % 10); v /= 10; } }
-  size_t o = 0;
-  while (n > 0 && o + 1 < cap) out[o++] = digits[--n];
-  out[o] = 0;
-}
+static void clicks_day(EGHttpResponse& res) {
+  corium::WebPortal::sendf(res, PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour);
 
-// snprintf returns the untruncated length
-static void send_n(EGHttpResponse& res, const char* line, size_t cap, int n) {
-  if (n <= 0) return;
-  res.sendChunk(line, (size_t)n < cap ? (size_t)n : cap - 1);
-}
-
-static void clicks_day(EGHttpResponse& res, char* line, size_t cap) {
-  send_n(res, line, cap, snprintf_P(line, cap,
-    PSTR("{\"last_day\":[%d"), (int)gcounter.clicks_hour));
-
-  const int histSize = gcounter.day_hourly_history.size();
-  for (int i = histSize; i > 0; i--) {
-    send_n(res, line, cap, snprintf_P(line, cap, PSTR(",%d"),
-                                 (int)gcounter.day_hourly_history[i - 1]));
+  const int n = gcounter.day_hourly_history.size();
+  for (int i = n; i > 0; i--) {
+    corium::WebPortal::sendf(res, PSTR(",%d"), (int)gcounter.day_hourly_history[i - 1]);
   }
 
-  send_n(res, line, cap, snprintf_P(line, cap,
+  corium::WebPortal::sendf(res,
     PSTR("],\"today\":%d,\"yesterday\":%d,\"ratio\":\"%s\""),
     (int)gcounter.clicks_today,
     (int)gcounter.clicks_yesterday,
-    EGPrefs::getString("counter", EG_K_RATIO)));
+    corium::Prefs::getString("counter", EG_K_RATIO));
 }
 
-static void clicks_since(EGHttpResponse& res, char* line, size_t cap) {
-  int n;
-  if (Clock::synced) {
-    n = snprintf_P(line, cap,
-      PSTR(",\"start\":%lu"), (unsigned long)Clock::boot_epoch);
+static void clicks_since(EGHttpResponse& res) {
+  if (corium::Clock::synced) {
+    char start[24];
+    fmtU64(start, sizeof(start), (uint64_t)corium::Clock::bootEpoch);
+    corium::WebPortal::sendf(res, PSTR(",\"start\":%s"), start);
   } else {
-    unsigned long uptime = Uptime::seconds() - start;
-    n = snprintf_P(line, cap,
-      PSTR(",\"uptime\":%lu"), uptime);
+    corium::WebPortal::sendf(res,
+      PSTR(",\"uptime\":%lu"), (unsigned long)corium::Uptime::since(corium::Uptime::start));
   }
-  send_n(res, line, cap, n);
 }
 
-static void clicks_life(EGHttpResponse& res, char* line, size_t cap) {
-  char clkBuf[24];
-  fmt_u64(clkBuf, sizeof(clkBuf), gcounter.get_lifetime_clicks_total());
-  send_n(res, line, cap, snprintf_P(line, cap,
+static void clicks_life(EGHttpResponse& res) {
+  char clk[24];
+  fmtU64(clk, sizeof(clk), gcounter.get_lifetime_clicks_total());
+  corium::WebPortal::sendf(res,
     PSTR(",\"life\":{\"clk\":%s,\"fbt\":%lu,\"secs\":%lu}"),
-    clkBuf, (unsigned long)gcounter.get_first_boot_ts(),
-    gcounter.get_lifetime_seconds()));
+    clk, (unsigned long)gcounter.get_first_boot_ts(),
+    gcounter.get_lifetime_seconds());
 }
 
 // log2 buckets, 64 us to 512 s+
-static void clicks_hist(EGHttpResponse& res, char* line, size_t cap) {
-  const uint32_t* hist = gcounter.pulse_histogram();
-  const uint8_t   nb   = Counter::pulse_histogram_buckets();
-  send_n(res, line, cap, snprintf_P(line, cap,
-                               PSTR(",\"hist\":[%lu"), (unsigned long)hist[0]));
+static void clicks_hist(EGHttpResponse& res) {
+  const uint8_t nb = Counter::pulse_histogram_buckets();
+  uint32_t hist[nb];
+  gcounter.pulse_histogram(hist);
+  corium::WebPortal::sendf(res, PSTR(",\"hist\":[%lu"), (unsigned long)hist[0]);
   for (uint8_t b = 1; b < nb; b++) {
-    send_n(res, line, cap, snprintf_P(line, cap, PSTR(",%lu"),
-                                 (unsigned long)hist[b]));
+    corium::WebPortal::sendf(res, PSTR(",%lu"), (unsigned long)hist[b]);
   }
   res.sendChunk(F("]"));
-  uint32_t mp = gcounter.get_min_pulse_us();
-  if (mp > 0) {
-    send_n(res, line, cap, snprintf_P(line, cap,
-                                 PSTR(",\"min_pulse_us\":%lu"), (unsigned long)mp));
+  uint32_t min_us = gcounter.get_min_pulse_us();
+  if (min_us > 0) {
+    corium::WebPortal::sendf(res, PSTR(",\"min_pulse_us\":%lu"), (unsigned long)min_us);
   }
 }
 
 static void hClicks(EGHttpRequest& req, EGHttpResponse& res, void*) {
   res.beginChunked(200, FPSTR(HTTP_CT_JSON));
-  char line[160];
-  clicks_day(res, line, sizeof(line));
+  clicks_day(res);
   gcounter.input()->appendClicksExtra(res);
-  clicks_since(res, line, sizeof(line));
-  if (gcounter.get_lifetime_enabled()) clicks_life(res, line, sizeof(line));
-  clicks_hist(res, line, sizeof(line));
+  clicks_since(res);
+  if (gcounter.get_lifetime_enabled()) clicks_life(res);
+  clicks_hist(res);
   res.sendChunk(F("}"));
   res.endChunked();
 }
@@ -133,17 +114,17 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
   // GeigerLog field order, keep it
   // CPM,CPS,CPM1st,CPS1st,CPM2nd,CPS2nd,CPM3rd,CPS3rd,Temp,Press,Humid,Xtra
   char cpm[16], cps[16], cpm5[16], cpm15[16], t[16], h[16], p[16], xtra[16];
-  egm_text(PSTR("cpm"),   EGM_OUT_JSON, cpm,   sizeof(cpm));
-  egm_text(PSTR("cps"),   EGM_OUT_JSON, cps,   sizeof(cps));
-  egm_text(PSTR("cpm5"),  EGM_OUT_JSON, cpm5,  sizeof(cpm5));
-  egm_text(PSTR("cpm15"), EGM_OUT_JSON, cpm15, sizeof(cpm15));
-  egm_text(PSTR("t"),     EGM_OUT_JSON, t,     sizeof(t));
-  egm_text(PSTR("h"),     EGM_OUT_JSON, h,     sizeof(h));
-  egm_text(PSTR("p"),     EGM_OUT_JSON, p,     sizeof(p));
-  if (!egm_text(PSTR("hv"), EGM_OUT_JSON, xtra, sizeof(xtra)))
-    egm_text(PSTR("usv"), EGM_OUT_JSON, xtra, sizeof(xtra));
+  corium::m_text(K_M_CPM,   corium::M_OUT_JSON, cpm,   sizeof(cpm));
+  corium::m_text(K_M_CPS,   corium::M_OUT_JSON, cps,   sizeof(cps));
+  corium::m_text(K_M_CPM5,  corium::M_OUT_JSON, cpm5,  sizeof(cpm5));
+  corium::m_text(K_M_CPM15, corium::M_OUT_JSON, cpm15, sizeof(cpm15));
+  corium::m_text(M_T,       corium::M_OUT_JSON, t,     sizeof(t));
+  corium::m_text(M_H,       corium::M_OUT_JSON, h,     sizeof(h));
+  corium::m_text(M_P,       corium::M_OUT_JSON, p,     sizeof(p));
+  if (!M_HAS_HV || !corium::m_text(M_HV, corium::M_OUT_JSON, xtra, sizeof(xtra)))
+    corium::m_text(K_M_USV, corium::M_OUT_JSON, xtra, sizeof(xtra));
 
-  char out[128];
+  char out[8 * sizeof(cpm) + 32];   // 8 fields and the commas
   snprintf_P(out, sizeof(out),
     PSTR("%s, %s, %s, , %s, , , , %s, %s, %s, %s"),
     cpm, cps, cpm5, cpm15, t, p, h, xtra);
@@ -151,14 +132,22 @@ static void hLastData(EGHttpRequest& req, EGHttpResponse& res, void*) {
 }
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
-static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
+// Up to 2 dp, a bad value leaves the target as it was
+static void set_target(const char* s) {
   int32_t target;
-  if (parse_centi(req.arg(F("v")), &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
+  if (parseCenti(s, &target) && target > 0) gcounter.set_target_cpm(target / 100.0f);
+}
+
+static void hSetCPM(EGHttpRequest& req, EGHttpResponse& res, void*) {
+  set_target(req.arg(F("v")));
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
+
+static void cmd_target() { set_target(corium::Console::next()); }
+CORIUM_REGISTER_CMD(target, cmd_target)
 #endif
 
-#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+#if CORIUM_HAS_TIMER1 && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
 // diag only, not a measurement
 static void json_timer1_stats(EGHttpResponse& res) {
   char buf[200];
@@ -179,9 +168,9 @@ static void hJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
   char out[256];
   EGJson j(out, sizeof(out), send_part, &res);
   j.map_begin();
-  egm_json_display(j, raw);
+  corium::m_json_display(j, raw);
   j.flush();   // closed by hand
-#if defined(ESP8266) && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
+#if CORIUM_HAS_TIMER1 && defined(EG_TIMER1) && defined(EG_TIMER1_STATS)
   if (raw) json_timer1_stats(res);
 #endif
   res.sendChunk(F("}"));
@@ -195,7 +184,7 @@ static const char HISTORY_BODY_LIFETIME[] PROGMEM = R"HTML(
 <div><span class=muted>Tracked </span><b id=lfd>&mdash;</b></div>
 <div><span class=muted>Install age </span><b id=lfi>&mdash;</b></div>
 <div><span class=muted>Avg CPM </span><b id=lfa>&mdash;</b></div>
-</div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(()=>location.reload())">Reset lifetime</button></p></div></div>
+</div><p style="margin:.8em 0 0"><button class=danger onclick="if(confirm('Reset lifetime counters?'))fetch('/life/reset',{method:'POST'}).then(r=>r.ok?location.reload():r.text().then(alert))">Reset lifetime</button></p></div></div>
 )HTML";
 
 static const char HISTORY_BODY_INTERPULSE[] PROGMEM = R"HTML(
@@ -221,14 +210,14 @@ static const char HISTORY_BODY_LAST24[] PROGMEM = R"HTML(
 <thead><tr><th>Date</th><th>Clicks</th><th>Avg CPM</th><th><span class=usvL>&micro;Sv</span></th></tr></thead>
 <tbody id=tb></tbody>
 </table>
-<script src=/histjs)HTML" EG_CACHE_BUST R"HTML(></script>
+<script src=/histjs)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML";
 
 static const char HIST_JS[] PROGMEM = R"JS(
 fetch('/clicks').then(r=>r.json()).then(o=>{
   var $=byID,N=Date.now()/1000|0,T=o.today||0,Y=o.yesterday||0,
       tb=$('tb'),
-      start='start' in o?new Date(o.start*1000):new Date(Date.now()-o.uptime*1000),
+      start=new Date(o.start*1000),
       rlv='roll' in o?o.roll*1000:3600000,
       rows='',mx=0,sum=0,
       F=s=>s>=31536000?(s/31536000).toFixed(1)+'y':s>=86400?(s/86400|0)+'d':s>=3600?(s/3600).toFixed(1)+'h':s>=60?(s/60|0)+'m':s+'s';
@@ -240,6 +229,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     if(L.fbt>0)$('lfi').textContent=F(N-L.fbt);
     $('lf').style.display='';
   }
+  if(!('start' in o))$('hsT').innerHTML='<a href=/network#time>Clock not set</a>';else{
   var nowMs=Date.now(),curB=Math.floor(nowMs/rlv)*rlv,pk=0,bs=o.start*1000;
   o.last_day.forEach((n,i)=>{
     sum+=n;if(n>mx)mx=n;
@@ -250,12 +240,12 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
   });
   $('hsT').textContent=T.toLocaleString();
   $('hsY').textContent=Y.toLocaleString();
-  var es='start' in o?Math.max(0,N-o.start):o.uptime||0,
+  var es=Math.max(0,N-o.start),
       h60=rlv>=3600000&&es>=3600,
       cpmA=h60?((o.last_day[1]||0)*(60-new Date().getMinutes())/60+(o.last_day[0]||0))/60
               :es>0?sum*60/Math.min(es,86400):0,
       M=N%86400,
-      ok=Y>0&&M>=3600&&'start' in o&&o.start<=N-M-86400,
+      ok=Y>0&&M>=3600&&o.start<=N-M-86400,
       Tp=M>0?T*86400/M:T,
       p=ok?(Tp-Y)*100/Y:0;
   $('hsA').textContent=Math.round(cpmA);
@@ -283,7 +273,8 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     rows+='<tr><td>'+sd.toLocaleString()+'</td><td>'+n+'</td><td>'+(ok?Math.ceil(n/mins):'—')+'</td><td'+(ok?' class=usv data-uv="'+uv+'"':'')+'>'+(ok?uv.toFixed(4):'—')+'</td></tr>';
   });
   tb.innerHTML=rows;
-  if(o.hist&&o.hist.length){
+  }
+  if(o.hist&&o.hist.length&&$('ph')){
     var H=o.hist,mh=1,
         L=['<64us','<128us','<256us','<512us','<1ms','<2ms','<4ms','<8ms','<16ms','<32ms','<64ms','<128ms','<256ms','<512ms','<1s','<2s','<4s','<8s','<16s','<32s','<1m','<2m','<4m','<8m','>8m'],
         showL=[0,4,8,12,16,20,24];
@@ -299,7 +290,7 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
     $('ph').innerHTML=hb;
     $('phL').innerHTML=lb;
   }
-  if(o.min_pulse_us){
+  if(o.min_pulse_us&&$('mp')){
     var u=o.min_pulse_us,
         s=u<1000?u+'µs':u<1e6?(u/1000).toFixed(u<10000?2:1)+'ms':(u/1e6).toFixed(2)+'s';
     $('mp').textContent=s;
@@ -310,31 +301,30 @@ fetch('/clicks').then(r=>r.json()).then(o=>{
 )JS";
 
 static void hHistory(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  const char* fn = DeviceInfo::friendlyName();
-  const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
-  WebPortal::sendPageHead(res, F("History"), sub);
+  corium::WebPortal::beginPage(res, F("History"), corium::DeviceInfo::displayName());
   res.sendChunk(FPSTR(HISTORY_BODY_LIFETIME));
 #if !GEIGER_IS_UDPRX(GEIGER_TYPE)
-  // udp rx is batched, no intervals
+  // Udp rx comes in batches, so there are no real intervals
   res.sendChunk(FPSTR(HISTORY_BODY_INTERPULSE));
 #endif
   res.sendChunk(FPSTR(HISTORY_BODY_LAST24));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  corium::WebPortal::endPage(res);
 }
 
 static void hHistJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_HIST_JS
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), HIST_JS_GZ, HIST_JS_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HIST_JS_GZ, HIST_JS_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.send(200, FPSTR(HTTP_CT_JS), FPSTR(HIST_JS));
 #endif
 }
 
 static void hLifeReset(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  gcounter.reset_lifetime();
+  if (!gcounter.reset_lifetime()) {
+    res.send(500, FPSTR(HTTP_CT_PLAIN), F("Not saved"));
+    return;
+  }
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 
@@ -346,16 +336,18 @@ static void hPause(EGHttpRequest& req, EGHttpResponse& res, void*) {
     return;
   }
   char body[40];
-  uint32_t rem = ExternalPause::remaining_ms();
+  uint32_t rem = ExternalPause::remaining_s();
   snprintf_P(body, sizeof(body),
-             rem ? PSTR("PAUSED %u s") : PSTR("RESUMED"), (unsigned)(rem / 1000U));
+             rem ? PSTR("PAUSED %u s") : PSTR("RESUMED"), (unsigned)rem);
   res.send(200, FPSTR(HTTP_CT_PLAIN), body);
 }
 
-// /status pollers, /json and /cs
+// JS for /status, it polls /json and /cs
 #if !EG_GZ_JS_BUNDLE
+extern const char cmdJS[] PROGMEM = R"JS(function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1})JS";
+
 extern const char statusJS[] PROGMEM = R"JS(
-!function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),W=$('tw'),D=Date,X=XMLHttpRequest,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",5,null,0,!0,!0,5,15);e.av=3;
+!function(){var $=byID,B=$('blip'),U=$('upt'),C=$('cpm'),T=$('tc'),V=$('usv'),S=$('cs'),R=$('rssi'),W=$('tw'),D=Date,O=setTimeout,P=n=>String(n).padStart(2,"0"),e=new Graph("g1",["CPM","CPM5","CPM15"],"cpm","g2",5,null,0,!0,!0,5,15);e.av=3;
 if(W&&window.GPIN>=0)W.innerHTML+=' (GPIO '+window.GPIN+')';
 if(window.BO)$('bw').style.display='';
 var ac,cps=0,nb,mu=$('snd'),mt=1,AC=window.AudioContext||window.webkitAudioContext;
@@ -373,35 +365,34 @@ s.connect(f);f.connect(g);g.connect(ac.destination);s.start(t);
 n=Math.max(20,-Math.log(1-Math.random())/cps*1000)}
 O(clk,n)})();
 if(window._seedHist&&window._seedHist.length){var N=window._seedHist.length,w=D.now();window._seedHist.forEach((v,i)=>e.update([v,v,v],new D(w-(N-1-i)*1e3).toLocaleTimeString()))}
-var J,L=0,I=2e3,K='#0f0',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
+var I=2e3,K='#0c9',A=0,F=function(){B.classList.add('f');O(()=>B.classList.remove('f'),90)};
 B.style.setProperty('--blip',K);
 setInterval(function(){A+=100/I;if(A>=1){F();if((A-=1)>3)A=3}},100);
-var Q=function(){if(!window._csk){window._csk=1;O(f,100)}},t=function(){var n=new X;n.open("GET","/json",!0);
-n.onload=function(){if(n.status>=200&&n.status<400){var o=JSON.parse(n.responseText),u=o.ut;
-U.textContent=(u/86400|0)+"T"+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
+var Q=function(){if(!window._csk){window._csk=1;csK(100)}};
+live("/json",1e3,function(s){Q();var o=s==null?0:JSON.parse(s),k=o?o.alert?2:o.warn?1:0:3,L=$('al');
+if(L.k!=k){L.k=k;L.style.display=k?'':'none';L.className='a '+(k==2?'ae':'aw');L.innerHTML=k>2?'<b>&#9888; Not updating</b> - no reply from the device.':'&#9888; '+(k>1?'Alert':'Warning')+' level reached'}
+if(!o){cps=0;I=Infinity}else{var u=o.ut;
+U.textContent=(u/86400|0)+"d "+P((u/3600|0)%24)+":"+P((u/60|0)%60)+":"+P(u%60);
 var dd=o.c-o.c5,dc=o.c<10&&o.c5<10&&dd*dd<9*o.c5?o.c5:o.c;C.textContent=dc.toFixed(2);T.textContent=o.tc;setUsv(V,dc/o.r);S.textContent=o.cs.toFixed(2);cps=o.cs;
-var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v+' dBm ('+p+'%)';
+var v=o.rssi,p=v<=-100?0:v>=-50?100:2*(v+100);R.textContent=v?v+' dBm ('+p+'%)':'-';
 if(W)W.style.display=(o.tc===0&&u>=Math.max(60,6e3/o.r))||o.tube===0?'':'none';
 if(o.t!=null||o.h!=null||o.p!=null){var tu=o.tu|0,us=['\xb0C','\xb0F','K'],ps=[];if(o.t!=null)ps.push(['Temp',o.t.toFixed(1)+us[tu]]);if(o.h!=null)ps.push(['Humid',o.h.toFixed(0)+'%']);if(o.p!=null)ps.push(['Press',o.p.toFixed(1)+' hPa']);var fx=ps.length>2;$('envR').className=fx?'row envflex':'row';$('envR').innerHTML=ps.map(fx?function(p){return '<div><b>'+p[0]+'</b>'+p[1]+'</div>'}:function(p){return '<b>'+p[0]+'</b><span>'+p[1]+'</span>'}).join('');$('envR').style.display=''}else $('envR').style.display='none';
 e.update([o.c,o.c5,o.c15]);var r=o.c5>0&&o.c>0?o.c/o.c5:1;
-I=Math.max(100,Math.min(4e3,2e3/r));
+I=Math.max(334,Math.min(4e3,2e3/r));
 var z=(o.c-o.c5)/Math.sqrt(Math.max(o.c5,1e-6));
-K=o.c<.01&&o.c5<.01?'#08f':z>3?'#f33':z>1.5?'#fa0':z<-1.5?'#c0f':'#0f0';
-B.style.setProperty('--blip',K)}L=D.now();Q();J=O(t,1e3)};
-n.onerror=function(){L=D.now();Q();J=O(t,6e3)};n.send()};
-O(t,250);document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(J);J=O(t,Math.max(0,1e3-(D.now()-L)))}})}();
-var DD=Date,lt,lc=0,x,id=0,M=1e4,dl=200,dz=0,T1,ci=3e3;
-function f(){clearTimeout(lt);T1=T1||byID("t1");x=new XMLHttpRequest;
-x.onload=function(){if(200==x.status){var n=x.responseText,nl=n.indexOf("\n"),ab=(T1.scrollHeight-T1.scrollTop-T1.clientHeight)<50,h=n.substr(0,nl).split(",");
+K=o.c<.01&&o.c5<.01?'#5be':z>3?'#d50':z>1.5?'#e90':z<-1.5?'#c7a':'#0c9';
+B.style.setProperty('--blip',K)}},250)}();
+var DD=Date,lc=0,id=0,M=1e4,dl=200,dz=0,T1,ci=3e3;
+var csK=live(function(){if(lc&&DD.now()-lc>1.08e7)id=0;return"/cs?c1="+id},3e3,function(n){lc=DD.now();if(n==null)return;T1=T1||byID("t1");
+var nl=n.indexOf("\n"),ab=(T1.scrollHeight-T1.scrollTop-T1.clientHeight)<50,h=n.substr(0,nl).split(",");
 id=h[0];dz=+h[1]||0;var e=n.substr(nl+1);
 if(e){e=e.replace(/^(\d\d):(\d\d):(\d\d)(?!\*)/gm,function(_,h,m,s){
 var b=-new DD().getTimezoneOffset(),T=((+h*60+(+m)+b-dz)%1440+1440)%1440;
 return String(T/60|0).padStart(2,"0")+":"+String(T%60).padStart(2,"0")+":"+s});
 T1.value+=e;var L=T1.value.split("\n");if(L.length>M)T1.value=L.slice(-(M-dl)).join("\n")}
-if(ab)T1.scrollTop=T1.scrollHeight}lc=DD.now();ci=e?3e3:Math.min(ci*1.5,8.3e3);lt=setTimeout(f,ci)};
-x.onerror=function(){lc=DD.now();lt=setTimeout(f,6e3)};x.open("GET","/cs?c1="+id,!0);x.send();return!1}
-document.addEventListener("visibilitychange",function(){if(!document.hidden){if(lc&&DD.now()-lc>1.08e7)id=0;ci=3e3;clearTimeout(lt);lt=setTimeout(f,Math.max(0,3e3-(DD.now()-lc)))}});
-window._boost=function(){ci=3e3;clearTimeout(lt);lt=setTimeout(f,200)};
+if(ab)T1.scrollTop=T1.scrollHeight;return ci=e?3e3:Math.min(ci*1.5,8.3e3)});
+document.addEventListener("visibilitychange",function(){if(!document.hidden)ci=3e3});
+window._boost=function(){ci=3e3;csK(200)};
 )JS";
 #endif
 
@@ -409,18 +400,19 @@ window._boost=function(){ci=3e3;clearTimeout(lt);lt=setTimeout(f,200)};
 static const char STATUS_BODY[] PROGMEM = R"HTML(
 <style>
 #blip{display:inline-block;width:.7em;height:.7em;border-radius:50%;background:var(--border);margin-right:.5em;vertical-align:middle;transition:background-color .08s ease-out,box-shadow .08s ease-out}
-#blip.f{background:var(--blip,#0f0);box-shadow:0 0 6px var(--blip,#0f0)}
+#blip.f{background:var(--blip,#0c9);box-shadow:0 0 6px var(--blip,#0c9)}
 #snd{display:none;width:auto;padding:.2em .8em;font-size:.85em;float:right;margin:0 0 .5em .5em}
 :root.crt #snd{display:inline-block}
 </style>
 <button id=snd>Sound: off</button>
 <canvas id=g1></canvas>
 <div id=g2></div>
-<p id=tw class="a aw" style=display:none><b>&#9888; No counts detected</b> - check tube and input wiring.</p>
-<p id=bw class="a aw" style=display:none><b>&#9888; Brownout reset detected</b> - check the power supply.</p>
+<p id=tw class="a aw" role=alert style=display:none><b>&#9888; No counts detected</b> - check tube and input wiring.</p>
+<p id=bw class="a aw" role=alert style=display:none><b>&#9888; Brownout reset detected</b> - check the power supply.</p>
+<p id=al class=a role=alert style=display:none></p>
 <div class=stat>
 <div class=row><b>CPM</b><span><span id=blip></span><span id=cpm>-</span></span><b>CPS</b><span id=cs>-</span></div>
-<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Total clicks</b><span id=tc>-</span></div>
+<div class=row><b><span class=usvL>&micro;Sv/h</span></b><span id=usv class=usv>-</span><b>Clicks</b><span id=tc>-</span></div>
 <div class=row><b>Uptime</b><span id=upt>-</span><b>Signal</b><span id=rssi>-</span></div>
 <div class=row id=envR style=display:none></div>
 </div>
@@ -428,63 +420,81 @@ static const char STATUS_BODY[] PROGMEM = R"HTML(
 <textarea readonly id=t1 wrap=off></textarea>
 <details style="margin-top:.4em"><summary style="cursor:pointer;color:var(--muted);width:1.5em;list-style-position:inside">&nbsp;</summary>
 <form id=cf style="display:flex;gap:.5em;margin-top:.4em" onsubmit="return cmdSend(event)">
-<input id=ci placeholder="cmd" style="flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:.95em" autocomplete=off spellcheck=false>
+<input id=ci aria-label=Command placeholder="cmd" style="flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:.95em" autocomplete=off spellcheck=false>
 <button type=submit>Send</button>
 </form>
 </details>
-<script>function cmdSend(e){e.preventDefault();var i=byID('ci'),v=i.value.trim();if(!v)return!1;var h=2166136261;for(var k=0;k<v.length;k++)h=Math.imul(h^v.charCodeAt(k),16777619)>>>0;if(h==1532375204)byID('snd').click();else if(h==4098154876)toggleCrt();else{fetch('/webcmd',{method:'POST',body:v});if(window._boost)_boost()}i.value='';return!1}</script>
-<script src=/js)HTML" EG_CACHE_BUST R"HTML(></script>
+)HTML"
+#if !CORIUM_HAS_FEW_SOCKETS
+R"HTML(<script src=/pgjs)HTML" CORIUM_CACHE_BUST R"HTML(></script>
+)HTML"
+#endif
+R"HTML(<script src=/js)HTML" CORIUM_CACHE_BUST R"HTML(></script>
 )HTML";
 
 static void status_seed(EGHttpResponse& res) {
-  int bo = DeviceInfo::resetReason() == DeviceInfo::RR_BROWNOUT;
+  int bo = corium::DeviceInfo::resetReason() == corium::DeviceInfo::RR_BROWNOUT;
   char buf[400];
-  size_t sp = 0;
-  advance_pos(sp, snprintf_P(buf, sizeof(buf),
+  size_t pos = 0;
+  advancePos(pos, snprintf_P(buf, sizeof(buf),
               PSTR("<script>var w=window;w.CHIPID=\"%s\";w.GPIN=%d;w.BO=%d;w._seedHist=["),
-              DeviceInfo::chipid(), gcounter.input_pin(), bo), sizeof(buf));
-  int histSize = gcounter.cpm_history.size();
-  for (int i = 0; i < histSize && sp + sizeof(",-2147483648") <= sizeof(buf); i++) {
-    advance_pos(sp, snprintf_P(buf + sp, sizeof(buf) - sp, i ? PSTR(",%d") : W_FMT_D,
+              corium::DeviceInfo::chipId(), gcounter.input_pin(), bo), sizeof(buf));
+  int n = gcounter.cpm_history.size();
+  for (int i = 0; i < n && pos + sizeof(",-2147483648") <= sizeof(buf); i++) {
+    advancePos(pos, snprintf_P(buf + pos, sizeof(buf) - pos, i ? PSTR(",%d") : W_FMT_D,
                 gcounter.cpm_history[i]), sizeof(buf));
   }
-  res.sendChunk(buf, sp);
+  res.sendChunk(buf, pos);
   res.sendChunk(F("]</script>"));
 }
 
 static void hStatus(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  const char* fn = DeviceInfo::friendlyName();
-  const char* sub = (fn && fn[0]) ? fn : DeviceInfo::hostname();
-  WebPortal::sendPageHead(res, F("Status"), sub);
+  corium::WebPortal::beginPage(res, F("Status"), corium::DeviceInfo::displayName());
   status_seed(res);
+  if (!corium::Clock::synced) res.sendChunk(F("<p><a href=/network#time>Clock not set</a></p>"));
   res.sendChunk(FPSTR(STATUS_BODY));
-  WebPortal::sendPageTail(res, true);
-  res.endChunked();
+  corium::WebPortal::endPage(res, true);
 }
 
 static void hJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_JS_BUNDLE
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), JS_BUNDLE_GZ, JS_BUNDLE_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), JS_BUNDLE_GZ, JS_BUNDLE_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
   res.beginChunked(200, FPSTR(HTTP_CT_JS));
+#if CORIUM_HAS_FEW_SOCKETS
   res.sendChunk(FPSTR(picographJS));
+#endif
+  res.sendChunk(FPSTR(cmdJS));
   res.sendChunk(FPSTR(statusJS));
   res.endChunked();
 #endif
 }
 
+static const char R_STATUS[]   PROGMEM = "/status";
+static const char R_JS[]       PROGMEM = "/js";
+static const char R_CLICKS[]   PROGMEM = "/clicks";
+static const char R_LASTDATA[] PROGMEM = "/lastdata";
+static const char R_JSON[]     PROGMEM = "/json";
+static const char R_HIST[]     PROGMEM = "/hist";
+static const char R_HISTJS[]   PROGMEM = "/histjs";
+static const char R_LIFE[]     PROGMEM = "/life/reset";
+static const char R_PAUSE[]    PROGMEM = "/pause";
+
+static const corium::WebRoute ROUTES[] PROGMEM = {
+  {R_STATUS,   hStatus,    EGHttpRequest::GET},
+  {R_JS,       hJs,        EGHttpRequest::GET},
+  {R_CLICKS,   hClicks,    EGHttpRequest::GET},
+  {R_LASTDATA, hLastData,  EGHttpRequest::GET},
+  {R_JSON,     hJson,      EGHttpRequest::GET},
+  {R_HIST,     hHistory,   EGHttpRequest::GET},
+  {R_HISTJS,   hHistJs,    EGHttpRequest::GET},
+  {R_LIFE,     hLifeReset, EGHttpRequest::POST},
+  {R_PAUSE,    hPause,     EGHttpRequest::GET},
+};
+
 void CounterRoutes::registerRoutes(EGHttpServer& http) {
-  http.on(F("/status"),   EGHttpRequest::GET,  hStatus);
-  http.on(F("/js"),       EGHttpRequest::GET,  hJs);
-  http.on(F("/clicks"),   EGHttpRequest::GET,  hClicks);
-  http.on(F("/lastdata"), EGHttpRequest::GET,  hLastData);
-  http.on(F("/json"),     EGHttpRequest::GET,  hJson);
-  http.on(F("/hist"),     EGHttpRequest::GET,  hHistory);
-  http.on(F("/histjs"),   EGHttpRequest::GET,  hHistJs);
-  http.on(F("/life/reset"), EGHttpRequest::POST, hLifeReset);
-  http.on(F("/pause"),      EGHttpRequest::GET,  hPause);
+  corium::WebPortal::on(http, ROUTES, sizeof(ROUTES) / sizeof(ROUTES[0]));
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   http.on(F("/cpm"),      EGHttpRequest::GET,  hSetCPM);
 #endif

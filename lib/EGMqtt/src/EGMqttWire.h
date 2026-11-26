@@ -22,7 +22,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// builders return the packet size, 0 = bad or no fit; parsers take the body
+#ifndef EGMQTT_CHECK_TEXT
+  #define EGMQTT_CHECK_TEXT 1   // 0 = no UTF-8 or filter level checks, lengths and NUL still
+#endif
+
+// Builders return the packet size, 0 if bad or it won't fit. Parsers take the body
 namespace EGMqttWire {
 
 enum Type : uint8_t {
@@ -32,8 +36,10 @@ enum Type : uint8_t {
 
 static const uint32_t LEN_MAX = 268435455;   // 4 length bytes of 7 bits
 static const uint8_t DUP = 0x08;             // in the first byte
+static const uint8_t REFUSED = 0x80;         // SUBACK
 
 inline Type type_of(uint8_t first) { return (Type)(first >> 4); }
+inline uint8_t qos_of(uint8_t first) { return (first >> 1) & 3; }
 inline uint16_t get16(const uint8_t* p) { return (uint16_t)((p[0] << 8) | p[1]); }   // big endian
 
 // fixed header: 2-5 bytes used, 0 = not all here yet, -1 = malformed
@@ -78,6 +84,7 @@ size_t ack(uint8_t* out, size_t cap, Type t, uint16_t id);   // PUBACK PUBREC PU
 size_t bare(uint8_t* out, size_t cap, Type t);               // PINGREQ DISCONNECT
 
 bool parse_publish(uint8_t first, const uint8_t* body, size_t n, Publish* p);
+__attribute__((warn_unused_result))
 bool publish_head(uint8_t first, uint16_t topic_len, uint16_t id, size_t n);   // all a skipped one has
 bool parse_connack(uint8_t first, const uint8_t* body, size_t n, bool* session, uint8_t* code);
 bool parse_id(uint8_t first, const uint8_t* body, size_t n, uint16_t* id);   // the acks

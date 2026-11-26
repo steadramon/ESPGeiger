@@ -18,66 +18,82 @@
 */
 #include "TestSerial.h"
 
-#if GEIGER_IS_TEST(GEIGER_TYPE) && GEIGER_IS_SERIAL(GEIGER_TYPE)
+#if GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
 
 #include <SoftwareSerial.h>
 #include "Corium/Logger/Logger.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
+#include "Corium/Util/MathUtil.h"
 #include "GeigerPrefs/GeigerKeys.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Counter/Counter.h"
 #include "Counter/Tube.h"
 #include "GeigerInput/SerialFormat.h"
 
-static GeigerPort<16> geigerPort;
+static GeigerPort<64> s_port;   // 1 ms idle polls at 115200
 
 GeigerTestSerial::GeigerTestSerial() {
   strlcpy(_test_type, "TestSerial", sizeof(_test_type));
 };
 
 void GeigerTestSerial::begin() {
-  uint8_t st = (uint8_t)EGPrefs::getUInt("counter", EG_K_SERIAL_TYPE);
+  uint8_t st = (uint8_t)corium::Prefs::getUInt("counter", EG_K_SERIAL_TYPE);
   if (SerialFormat::is_known(st)) _serial_type = st;
   uint32_t    baud = SerialFormat::baud_for(_serial_type);
   const char* name = SerialFormat::name_for(_serial_type);
   if (baud == 0) baud = 9600;
-  if (name && EGPrefs::getString("counter", EG_K_GEIGER_MODEL)[0] == '\0') {
+  if (name && corium::Prefs::getString("counter", EG_K_GEIGER_MODEL)[0] == '\0') {
     Tube::set_model(name);
   }
-  Log::console(PSTR("TestSerial: %s (type %d) BAUD: %lu RXPIN: %d"),
-               name ? name : PSTR("?"), _serial_type, baud, _rx_pin, _tx_pin);
+  corium::Log::console(PSTR("TestSerial: %s (type %d) BAUD: %lu RXPIN: %d TXPIN: %d"),
+                       name ? name : PSTR("?"), _serial_type, baud, _rx_pin, _tx_pin);
 #ifdef GEIGER_COUNT_TXPULSE
-  Log::console(PSTR("TestSerial: TX pulse counting enabled"));
+  corium::Log::console(PSTR("TestSerial: TX pulse counting enabled"));
 #endif
-  geigerPort.begin(baud, _rx_pin, _tx_pin);
-  uint32_t skip = 1500000UL / baud;
-  if (skip < 5)   skip = 5;
-  if (skip > 500) skip = 500;
-  _idle_skip = (uint16_t)skip;
-  _poll_skip = _idle_skip;
+  if (!s_port.begin(baud, _rx_pin, _tx_pin)) {
+    corium::Log::console(PSTR("TestSerial: ERROR port would not open"));
+  }
+  _idle_ms = (uint8_t)clamp<uint32_t>(12500UL / baud, 1, 4);   // ~1 char
+  _polls = true;
   CPMAdjuster();
 }
 
 void GeigerTestSerial::pullSerial() {
-  while (geigerPort.available()) {
-    char input = geigerPort.read();
-    _serial_buffer[_serial_idx++] = input;
-    if (input == '\n') {
-      _serial_buffer[_serial_idx++] = '\0';
-      handleSerial(_serial_buffer);
-      _serial_idx = 0;
-      _serial_buffer[0] = '\0';
+  while (s_port.available()) {
+    char c = s_port.read();
+    _buf[_pos++] = c;
+    if (c == '\n') {
+      _buf[_pos++] = '\0';
+      handleSerial(_buf);
+      _pos = 0;
+      _buf[0] = '\0';
     }
-    if (_serial_idx > 52) {
-      _serial_idx = 0;
-      _serial_buffer[0] = '\0';
+    if (_pos > 52) {
+      _pos = 0;
+      _buf[0] = '\0';
     }
   }
 }
 
+// A write busy-waits each bit, ~50 ms a line at 9600, so it's done here and not in the tick
+void GeigerTestSerial::send_line() {
+  _send = false;
+  char line[80];
+  size_t n = SerialFormat::format_line(_serial_type, line, sizeof(line));
+  if (n == 0) return;
+  char echo[80];
+  memcpy(echo, line, n);
+  echo[n] = '\0';
+  while (n > 0 && (echo[n - 1] == '\n' || echo[n - 1] == '\r')) echo[--n] = '\0';
+  corium::Log::console(PSTR("TestSerial TX: %s"), echo);
+  s_port.write((const uint8_t*) line, strlen(line));
+}
+
 void GeigerTestSerial::loop() {
+  if (_send) send_line();
   pullSerial();
-  _poll_skip = _serial_idx ? 0 : _idle_skip;   // mid line, every pass
+  uint32_t now = corium::fastMillis();
+  _poll_at = _pos ? now : now + _idle_ms;   // mid line, every pass
 }
 
 void GeigerTestSerial::secondTicker() {
@@ -85,9 +101,10 @@ void GeigerTestSerial::secondTicker() {
   int count = 0;
   double target = (double) GeigerInputTest::getTargetCPS();
   if (target > 0) {
+    // Box-Muller, normal about the target with sd sqrt(target)
     double u1, u2;
-    u1 = ((double)DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
-    u2 = ((double)DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
+    u1 = ((double)corium::DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
+    u2 = ((double)corium::DeviceInfo::hwRandom() + 1) / ((double)0xFFFFFFFF + 2);
     double z = sqrt(-2 * log(u1)) * cos(2 * M_PI * u2);
     long c = lround(target + sqrt(target) * z);
     if (c > 0) count = (int) c;
@@ -95,23 +112,13 @@ void GeigerTestSerial::secondTicker() {
 
   // count first, like the device
   if (count > 0) setCounter(count, false);
-
-  char line[80];
-  size_t n = SerialFormat::format_line(_serial_type, line, sizeof(line));
-  if (n > 0) {
-    char echo[80];
-    memcpy(echo, line, n);
-    echo[n] = '\0';
-    while (n > 0 && (echo[n - 1] == '\n' || echo[n - 1] == '\r')) echo[--n] = '\0';
-    Log::console(PSTR("TestSerial TX: %s"), echo);
-    geigerPort.write((const uint8_t*) line, strlen(line));
-  }
+  _send = true;
 }
 
 void GeigerTestSerial::handleSerial(char* input) {
-  int _scpm = 0;
-  if (SerialFormat::parse_cpm(_serial_type, input, &_scpm)) {
-    Log::console(PSTR("TestSerial RX: %d"), _scpm);
+  int cpm = 0;
+  if (SerialFormat::parse_cpm(_serial_type, input, &cpm)) {
+    corium::Log::console(PSTR("TestSerial RX: %d"), cpm);
   }
 }
-#endif // GEIGER_IS_TEST && GEIGER_IS_SERIAL
+#endif // GEIGER_TYPE_TESTSERIAL

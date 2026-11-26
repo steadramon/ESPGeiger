@@ -30,11 +30,17 @@ class GRNG
   public:
     GRNG();
     void begin();
+    // Called from loop
     static void mix(uint32_t bits);
+    // Stirs hw random into the pool and reseeds random()
     static uint32_t stir();
+    // for keys and passwords
     static void extract(uint8_t* out, size_t n);
     static uint32_t fast_uint32();
+    // xorshift seeded from the pool, bulk only, not for keys
     static void extract_fast(uint8_t* out, size_t n);
+    // no modulo bias
+    static void pick(char* out, size_t n, PGM_P set, uint8_t set_len);
 };
 
 namespace GRNGRoutes {

@@ -18,13 +18,17 @@ The main page has buttons to reach each area of configuration:
 
 * **Config** - all general device and output settings. See the [Configuration reference](/configuration) for the full list of options, value ranges and defaults.
 * **Network Config** - Wi-Fi, static IP, time zone and NTP server. See [/network page](#network-page) and [Time and NTP](/configuration/ntp).
-* **HV Config** - high-voltage tuning for ESPGeiger-HW boards. See [HV Configuration](/configuration/hv).
+* **HV Config** - high-voltage tuning on ESPGeiger-HW and the `*_hv` builds. See [HV Configuration](/configuration/hv).
 
 ## Live blip indicator on `/status`
 
 The coloured dot next to the CPM reading on the `/status` page is a synchronised mirror of the [NeoPixel output](/output/neopixel) - it flashes at a rate proportional to the CPM-vs-CPM5 ratio and changes colour based on a Poisson z-score against the 5-minute baseline. See the [NeoPixel page](/output/neopixel#how-the-trend-colour-and-flash-rate-are-derived-modes-3-and-4) for the colour table and full derivation.
 
-It's an "activity trend" indicator rather than a per-click visualization. For per-click visual feedback, see the blip LED on supported builds. 
+It's an "activity trend" indicator rather than a per-click visualization. For per-click visual feedback, see the blip LED on supported builds. On the page the dot flashes at most 3 times a second, in colour-blind safe shades of the same colours. On the graph CPM5 and CPM15 are dashed.
+
+While CPM is over the warning or alert level, `/status` shows "Warning level reached" or "Alert level reached" under the graph. Screen readers announce it once, when the level changes.
+
+If the device stops replying, `/status` shows "Not updating - no reply from the device." and the dot and the browser clicks stop until it answers again. `/hv` shows "(not updating)" next to the target.
 
 ## Console log
 
@@ -42,23 +46,30 @@ The ESPGeiger web portal exposes a number of HTTP endpoints that are useful for 
 | Path | Description |
 |---|---|
 | `/` | Main home page |
-| `/status` | Detailed device status page (live readings, uptime, build info) |
+| `/status` | Live readings, graph and console log |
 | `/hist` | Rolling 24 h click history, lifetime totals and inter pulse interval histogram - see [History page](/output/history) |
 | `/clicks` | JSON feed of the 24 h hourly bucket array plus today/yesterday totals and (when enabled) the lifetime block `{clk, fbt, secs}` - powers `/hist`. `secs` = tracked seconds (CPM denominator, advances only over persisted spans); `fbt` = first-boot epoch (install age). |
 | `/json` | Machine-readable status snapshot - see [JSON Endpoint](/output/integrations#json-endpoint) |
 | `/lastdata` | GeigerLog-compatible CSV line - see [GeigerLog](/output/integrations#geigerlog) |
+| `/metrics` | Prometheus text format - see [Prometheus](/output/integrations#prometheus-native-metrics) |
+| `/vars.json` | Every template variable and its value now - see [Serial Output](/output/serial#variables) |
+| `/pause?s=N` | Pause posts to outside services for N seconds - see [Pause Posts](/output/pause) |
 | `/info` | Human-readable HTML page with full device + network identity - see [/info page](#info-page) |
-| `/about` | Build, hardware and module identity, as JSON (useful for support) |
+| `/about` | Build and hardware identity, as JSON (useful for support) |
+| `/ps` | The main loop's speed, memory, and each module's priority, longest recent loop, slow loops and what holds it up, as JSON |
 | `/network` | WiFi + static IP + NTP configuration - see [/network page](#network-page) |
 | `/outputs` | Whether each enabled upload service is working, as JSON |
-| `/hv` | High-voltage tuning page (ESPGeiger-HW builds only) |
+| `/hv` | High-voltage tuning page (ESPGeiger-HW and `*_hv` builds) |
 | `/cpm?v=N` | Set target CPM on test geiger builds - see [Test build CPM setter](#test-build-cpm-setter) |
+| `/sd` | SD card logs: list and download the CSV files (SD card builds) - see [SD Output](/output/sdcard) |
 | `/screen` | Live display preview (OLED and MAX7219/TM1637 builds) - see [OLED](/output/oled#browser-screen-viewer) |
-| `/export` | Streaming base64+CRC32 dump of all prefs (skips `sys.web_pass` and the `net` group). UI lives on the Config page's Backup tab. |
-| `/import` (POST) | Apply a previously-exported blob (overlay-only; keys not in the blob are left alone). Reboots on success. |
-| `/life/reset` (POST) | Zero the lifetime click counter + first-boot timestamp. Button on `/hist`. |
-| `/erase` | Wipe saved WiFi credentials and reboot into the captive setup portal. Linked from `/network` → Erase WiFi config. |
-| `/restart` | Reboots the device - use with care |
+| `/export` | Streaming base64+CRC32 dump of the prefs that differ from their defaults. Device-only prefs are skipped: `sys.web_pass`, `sys.cpu_mhz`, the `net` group, the hidden `wifi.*` tunables and the lifetime totals. UI lives on the Config page's Backup tab. A 409 naming the group while a stored pref in an exported group didn't load. |
+| `/import` (POST) | Apply a previously-exported blob. Every pref except the device-only ones goes back to its default first, so keys not in the blob end up at their defaults. Restarts on success. Refused while a stored pref in an exported group didn't load. |
+| `/life/reset` (POST) | Zero the lifetime clicks and tracked seconds; the first-boot timestamp stays. Button on `/hist`. |
+| `/erase` (POST) | Wipe saved WiFi credentials, clear the `net` group (DHCP, as `resetnet`) and restart into the setup portal. Linked from `/network` > Advanced > Erase WiFi. |
+| `/reset` (POST) | Factory reset. Every setting back to its default, WiFi credentials and the web password copy cleared; the lifetime totals and the station key are kept. Restarts into the setup portal. Button: `/network` > Advanced > Factory reset. |
+| `/update` | Firmware update page; a POST takes the `.bin` |
+| `/restart` | Restarts the device - use with care |
 
 For the `/json` response schema and examples of integrating `/json` or `/lastdata` with external tools (GeigerLog, Home Assistant, Prometheus, InfluxDB, Node-RED, Grafana), see [Integrations](/output/integrations).
 
@@ -70,10 +81,11 @@ Human-readable HTML report grouped into expandable sections. Useful as the first
 
 | Section | Contents |
 |---|---|
-| System | Uptime, chip ID, platform, flash size, core/SDK version, CPU frequency, free heap, sketch size, last reset reason. On ESP8266, exception cause / PC / address are shown when the last reset was a crash. |
-| Network | SSID, BSSID, signal strength, channel, local IP, gateway, subnet, DNS, MAC, hostname. AP mode shows softAP SSID, IP and MAC instead. |
-| Firmware | Version, git hash, build environment, build date, geiger model + type, PCNT availability, test-build flag. |
-| Modules | List of compiled-in modules and their runtime state. |
+| System | Health (`ok` or what is wrong right now; what was on since boot is in `/about`), uptime, where the time came from (NTP, an RTC chip, kept over a restart on ESP32, or not set; an ESP8266 loses it on a restart), chip ID, free memory, firmware size and the room for it, file space, flash wear, chip temperature (ESP32-C3, S2 and S3), restart reason. After a crash it adds the exception cause, PC and fault address, the extra registers and the saved stack: on ESP8266 only the code addresses in it, on ESP32 the backtrace, on ESP32-C3 the raw stack (with mcause and mtval); a Crashed in row names the module that was running. On ESP8266 an abort, an out of memory and a stack smash each have their own restart reason, and a soft watchdog shows its PC. A crash dump cut short by the reset shows as damaged. Rows that only matter when something's wrong show only then: safe mode, crash boots in a row, a flash size that doesn't match the chip, a web password restored from backup. |
+| WiFi | Network and channel, signal (RSSI in dBm, with excellent / good / fair / weak), IP, hostname, MAC, DNS. The hotspot's SSID, IP and MAC while it's running. |
+| About | Version (with the git hash and build date), build environment, Geiger model. |
+
+The chip, flash, core/SDK and WiFi radio details, stack headroom and feature flags are in `/about`, the module list in `/ps`.
 
 For machine-readable equivalents see `/json` (live data) and `/about` (static identity).
 
@@ -84,19 +96,19 @@ WiFi + IP + NTP configuration, all on a single page. Reachable from the home pag
 | Setting | Notes |
 |---|---|
 | **Network** dropdown | Live-scanned list of nearby SSIDs. The **Rescan** button re-runs a fresh scan. |
-| **SSID** | Manual SSID entry. Blank keeps the current network (useful when only changing the password or IP settings). |
-| **Password** | WPA2 password. Blank for open networks. |
-| **Use static IP** | Toggle under **Network (advanced)**. When unchecked the device gets its address by DHCP. When checked the four IP fields below take effect after reboot. |
-| **IP address / Gateway / Subnet mask** | IPv4 fields with client-side validation. Server re-validates at boot; invalid combinations fall back to DHCP. |
+| **SSID** | Manual SSID entry. Blank keeps the current network and its password (useful when only changing the IP settings). To change the password, enter the SSID again. |
+| **Password** | WPA2 password, 8-63 characters or a 64 hex digit key. Blank for open networks. Anything else is refused with an error. |
+| **Use static IP** | Toggle under **Network (advanced)**. When unchecked the device gets its address by DHCP. When checked the four IP fields below take effect after a restart. |
+| **IP address / Gateway / Subnet mask** | IPv4 fields with client-side validation. Server re-validates at boot; invalid combinations fall back to DHCP. On the first boot after a change the device also checks it can look up the NTP server name (the default NTP host if the NTP server is an IP address). If that fails it puts the previous IP settings back and restarts. |
 | **DNS server** | Optional. If blank, the gateway is used. |
-| **Time / NTP** | Lazy-loaded section: timezone picker, NTP server, manual time/date entry, DST mode. Pulls a ~4 KB JS payload only when expanded. |
-| **Erase WiFi config** | Under **Advanced**. Wipes saved credentials and reboots into the captive setup portal. Useful when no hardware reset button is available. |
+| **Time / NTP** | Lazy-loaded section: timezone picker (with a **Detect** button that takes your browser's timezone) and NTP server. Pulls a ~4 KB JS payload only when expanded. |
+| **Erase WiFi** | Under **Advanced**. Wipes saved credentials and the static IP settings, and restarts into the setup portal. Useful when no hardware reset button is available. |
 
-After **Save and reboot**, the device tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute.
+After **Save and restart**, the device tries the new credentials. If the new network is unreachable, the previous one is restored automatically after about a minute; if that fails too, that boot opens the setup portal. Hotspot mode saves the same way and turns the hotspot off. When the new network fails, the setup portal, or this page once back on the previous network, shows a **Last try** line that says why.
 
 ### Test build CPM setter
 
-Test builds (any target whose `GEIGER_TYPE` has the test bit set, e.g. `espgeigerlog_test`, `esp32_testpulse`, `espgeigerlite_testpulse`) expose `/cpm` so you can steer the simulated counter from a browser or script. This is useful for exercising downstream integrations (MQTT, Thingspeak, alert thresholds, dashboards) without needing a radiation source.
+Test builds (any target whose `GEIGER_TYPE` has the test bit set, e.g. `espgeigerlog_test`, `esp32_testpulse`) expose `/cpm` so you can steer the simulated counter from a browser or script. This is useful for exercising downstream integrations (MQTT, `/json`, the display, alert thresholds, dashboards) without needing a radiation source.
 
 ```
 GET /cpm?v=<target_cpm>

@@ -1,5 +1,5 @@
 /*
-  AppHooks.h - What Corium calls in the app. The app defines them.
+  AppHooks.h - app hooks, empty by default
 
   Copyright (C) 2026 @steadramon
 
@@ -16,20 +16,29 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef APP_HOOKS_H
-#define APP_HOOKS_H
+#ifndef CORIUM_APP_HOOKS_H
+#define CORIUM_APP_HOOKS_H
 
 class EGHttpServer;
 class EGHttpResponse;
-struct EGMenuEntry;
+class EGJson;
+namespace corium { struct MenuEntry; }
 
+namespace corium {
 namespace AppHooks {
-  const EGMenuEntry* menu();   // first on the home page, PROGMEM, not in safe mode
-  void console(const char* text);   // web console, may hold more than one line
+  const MenuEntry* menu();   // Shown first on the home page, PROGMEM, not in safe mode
   void routes(EGHttpServer& http);   // not in safe mode
-  void info_rows(EGHttpResponse& res);   // About table on /info
-  void about_json(EGHttpResponse& res);   // /about fields, each ends with a comma
-  void metrics(EGHttpResponse& res, const char* cid);   // after the measure rows
+  void statusRows(EGHttpResponse& res);   // top of the System table on /info
+  void infoRows(EGHttpResponse& res);   // About table on /info
+  void rowTail(const char* mid, const char* id, EGHttpResponse& res);   // after a /param row
+  void aboutJson(EGJson& j);   // /about fields
+  void metrics(EGHttpResponse& res, const char* cid);   // After the measure rows
+  void onCrash();   // 8266 crash callback, runs before the stack prints. No heap, Serial or libc in here
 }
+}  // namespace corium
+
+// In PROGMEM, served after the core's own
+extern const char APP_CSS[];        // style.css tail
+extern const char APP_THEME_JS[];   // theme.js tail
 
 #endif

@@ -1,5 +1,5 @@
 /*
-  EGHttpHeaders.h - request header recognisers, no String, no AsyncTCP.
+  EGHttpHeaders.h - request header recognisers, no String, no TCP.
 
   Copyright (C) 2026 @steadramon
 
@@ -25,12 +25,13 @@
 enum EGHttpCLResult : unsigned char {
   EGHTTP_CL_ABSENT = 0,   // no header, length is 0
   EGHTTP_CL_OK,
-  EGHTTP_CL_BAD           // sign, junk, empty, or more than 8 digits
+  EGHTTP_CL_BAD           // sign, junk, empty, more than 8 digits, twice, or Transfer-Encoding
 };
 
+// out = 0 unless OK
 EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* out);
 
-// just past PROGMEM "Name:", or nullptr
+// Points just past PROGMEM "Name:" at a line start, any case, or nullptr
 const char* eghttp_find_header(const char* hdr, size_t headerEnd, const char* name);
 
 #endif

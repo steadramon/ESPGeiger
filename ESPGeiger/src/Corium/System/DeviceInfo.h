@@ -17,16 +17,22 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 */
-#ifndef DEVICEINFO_H
-#define DEVICEINFO_H
+#ifndef CORIUM_DEVICEINFO_H
+#define CORIUM_DEVICEINFO_H
 
 #include <Arduino.h>
+// Each chip has its own file for the /info extras, random, boot ram, raw heap, stack and wdt
+#if defined(ESP8266)
+#include "DeviceInfo8266.h"
+#elif defined(ESP32)
+#include "DeviceInfo32.h"
+#else
+#include "DeviceInfoHost.h"
+#endif
 
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
 #endif
-
-#define EG_CACHE_BUST "?v=" GIT_VERSION
 
 #include "App/Version.h"
 #include "App/AppConfig.h"
@@ -37,27 +43,45 @@
 
 #define CHIPID_LEN 6   // low 24 bits, hex
 
+namespace corium {
 namespace DeviceInfo {
-  void begin();   // early in setup()
+  void begin();   // Early in setup()
   void factoryReset();
 
   const char* hostname();
-  const char* chipid();
-  const char* useragent();
-  const char* chipmodel();
+  const char* chipId();
+  uint32_t chipHash();   // fnv1a of chipid
+  constexpr size_t UA_MAX = sizeof(THING_NAME "/" RELEASE_VERSION " (" GIT_VERSION "; " BUILD_ENV "; )") + CHIPID_LEN;
+  void userAgent(char* buf, size_t cap);   // Per request, no buffer kept
+  const char* chip();
+  const char* board();   // the app's board name, else the chip
+  void setBoard(const char* s);   // from setup()
+#ifdef CORIUM_BOARD_NAME
+  const char* boardName();   // the revision a user sees, nullptr = none
+  void setBoardName(const char* s);
+#else
+  inline const char* boardName() { return nullptr; }
+#endif
   const char* friendlyName();
   void setFriendlyName(const char* s);
+  inline const char* displayName() {
+    const char* fn = friendlyName();
+    return (fn && fn[0]) ? fn : hostname();
+  }
   const char* mac();
   const char* flashInfo();   // "ef4016 DIO 40MHz"
-  uint64_t hwid();   // chip id, efuse mac on esp32
+  PGM_P buildDate();   // one PROGMEM copy
+  uint64_t hwId();   // Chip id, efuse mac on esp32
 
-  inline uint32_t hwRandom() {
-#ifdef ESP8266
-    return RANDOM_REG32;
-#else
-    return esp_random();
-#endif
-  }
+  // /info
+  inline uint32_t flashSize()  { return ESP.getFlashChipSize(); }
+  inline uint32_t cpuMHz()     { return ESP.getCpuFreqMHz(); }
+  inline uint32_t sketchSize() { return ESP.getSketchSize(); }
+  inline uint32_t freeSketch() { return ESP.getFreeSketchSpace(); }
+
+  inline __attribute__((always_inline)) uint32_t cycles() { return ESP.getCycleCount(); }
+  inline uint32_t heapNow() { return ESP.getFreeHeap(); }   // Raw, freeHeap() is smoothed
+  uint32_t heapSize();   // 8266 dram size since the core has no getter, on esp32 free + allocated
 
   unsigned long uptime();
 
@@ -68,21 +92,12 @@ namespace DeviceInfo {
   uint8_t heapFrag();   // %
 
   uint32_t largestFreeBlock();
-  uint32_t largestFreeBlockLow();
-  void     largestFreeBlockLowReset();
-
-#ifdef ESP32
-  float chipTempC();   // die not ambient, classic esp32 reads high
-  extern uint8_t ct_wait;
-  void chipTempRead();
-  // 1 Hz, no call till a read is due
-  inline void chipTempSample() {
-    if (ct_wait) { ct_wait--; return; }
-    chipTempRead();
-  }
+  uint32_t largestFreeBlockLow();       // since boot
+#ifdef CORIUM_LFB_TAKE
+  uint32_t largestFreeBlockLowTake();   // since the last take, only one caller should take it
 #endif
 
-  // Sent to WebAPI, never renumber
+  // Sent on the wire, never renumber
   enum ResetReason : uint8_t {
     RR_UNKNOWN    = 0,
     RR_POWER_ON   = 1,
@@ -94,16 +109,18 @@ namespace DeviceInfo {
     RR_DEEP_SLEEP = 7,
   };
   uint8_t resetReason();
-  const char* resetText();   // /info text
+  uint8_t resetKind();   // From the chip, CrashDump::reset() knows more
+  const char* resetText();   // /info text for CrashDump::reset()
 
   uint32_t fwFingerprint();   // never 0
 
-  void safeRestart(uint32_t delayMs = 0);
+  void safeRestart(uint32_t delay_ms = 0);
 
   // false on esp32
   bool resetExc(uint32_t* epc1, uint32_t* excvaddr, uint8_t* exccause,
                 uint32_t* epc2 = nullptr, uint32_t* epc3 = nullptr,
                 uint32_t* depc = nullptr);
 }
+}  // namespace corium
 
 #endif

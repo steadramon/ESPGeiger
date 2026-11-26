@@ -17,17 +17,19 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "OutputVars.h"
+#include "Corium/Util/Attr.h"
 #include <string.h>
 
+namespace corium {
 namespace OutputVars {
 
-// 0 = row's own
+// 0 keeps the row's own setting
 struct Spec {
-  char    unit;      // temp rows only
+  char    unit;      // Temp rows only
   uint8_t decimals;  // float rows only
 };
 
-// [C|F|K][1-9]
+// Spec is [C|F|K][1-9], either part can be left out but not both
 static bool parse_spec(const char* s, size_t n, Spec* out) {
   size_t i = 0;
   if (i < n && (s[i] == 'C' || s[i] == 'F' || s[i] == 'K')) out->unit = s[i++];
@@ -35,43 +37,42 @@ static bool parse_spec(const char* s, size_t n, Spec* out) {
   return i > 0 && i == n;
 }
 
-static bool lookup(const char* id, size_t n, EGMeasure* row, EGMValue* val) {
+static bool lookup(const char* id, size_t n, Measure* row, MValue* val) {
   if (n == 0 || n >= sizeof(row->id)) return false;
-  for (EGMeasureIter it(EGM_OUT_VARS); it.next(); ) {
-    const EGMeasure& m = it.row();
-    if (strncmp(m.id, id, n) == 0 && m.id[n] == '\0') {
-      *row = m;
-      *val = it.value();
-      return true;
-    }
-  }
-  return false;
+  char want[sizeof(row->id)];
+  memcpy(want, id, n);
+  want[n] = '\0';
+  MeasureIter it(M_OUT_VARS, false, want);   // want is in SRAM, the _P compare reads that fine
+  if (!it.next()) return false;
+  *row = it.row();
+  *val = it.value();
+  return true;
 }
 
 static uint8_t unit_code(char unit) {
-  return unit == 'F' ? EGMT_F : unit == 'K' ? EGMT_K : EGMT_C;
+  return unit == 'F' ? MT_F : unit == 'K' ? MT_K : MT_C;
 }
 
-static bool apply(EGMeasure& m, const Spec& s) {
-  if (s.unit && m.unit != EGMU_CELSIUS) return false;
+static bool apply(Measure& m, const Spec& s) {
+  if (s.unit && m.unit != MU_CELSIUS) return false;
   if (s.decimals) {
-    if (m.kind != EGM_F32) return false;
+    if (m.kind != M_F32) return false;
     m.decimals = s.decimals;
   }
   return true;
 }
 
-size_t render(const char* key, size_t klen, char* buf, size_t cap) {
+size_t render(const char* key, size_t klen, char* buf, size_t cap, bool* cut) {
   if (!key || !buf || cap == 0) return 0;
   const char* colon = (const char*)memchr(key, ':', klen);
   size_t idlen = colon ? (size_t)(colon - key) : klen;
   Spec spec = {0, 0};
   if (colon && !parse_spec(colon + 1, klen - idlen - 1, &spec)) return 0;
-  EGMeasure m;
-  EGMValue v;
+  Measure m;
+  MValue v;
   if (!lookup(key, idlen, &m, &v) || !apply(m, spec)) return 0;
-  uint8_t unit = spec.unit ? unit_code(spec.unit) : egm_temp_unit();
-  return egm_format_unit(m, v, unit, buf, cap);
+  uint8_t unit = spec.unit ? unit_code(spec.unit) : m_temp_unit();
+  return m_format_unit(m, v, unit, buf, cap, cut);
 }
 
 static bool unescape(char in, char* out) {
@@ -87,8 +88,8 @@ static bool unescape(char in, char* out) {
   return false;
 }
 
-// p on '\', false = full. Unknown escapes pass through
-static bool put_escape(const char*& p, char* buf, size_t& pos, size_t cap) {
+// p points at the '\'. false = buffer full, unknown escapes pass through
+CORIUM_NODISCARD static bool put_escape(const char*& p, char* buf, size_t& pos, size_t cap) {
   p++;
   char c = 0;
   if (unescape(*p, &c)) { buf[pos++] = c; p++; return true; }
@@ -99,17 +100,19 @@ static bool put_escape(const char*& p, char* buf, size_t& pos, size_t cap) {
   return true;
 }
 
-// p on '{', false = full
-static bool put_var(const char*& p, char* buf, size_t& pos, size_t cap) {
+// p points at the '{', false = buffer full
+CORIUM_NODISCARD static bool put_var(const char*& p, char* buf, size_t& pos, size_t cap) {
   const char* k = p + 1;
   const char* e = strchr(k, '}');
   if (!e) { buf[pos++] = *p++; return true; }
   size_t klen = (size_t)(e - k);
-  size_t n = render(k, klen, buf + pos, cap - pos);
+  bool cut = false;
+  size_t n = render(k, klen, buf + pos, cap - pos, &cut);
+  if (cut) return false;
   if (n > 0) {
     pos += n;
   } else {
-    // unknown, print {name} as is
+    // Unknown name, print {name} as is
     size_t need = klen + 2;
     if (pos + need >= cap) return false;
     buf[pos++] = '{';
@@ -126,7 +129,7 @@ size_t renderTemplate(const char* tpl, char* buf, size_t cap) {
   size_t pos = 0;
   const char* p = tpl;
   while (*p) {
-    if (pos + 1 >= cap) break;  // leave room for NUL
+    if (pos + 1 >= cap) break;  // Leave room for NUL
     bool more = true;
     if (*p == '\\')     more = put_escape(p, buf, pos, cap);
     else if (*p == '{') more = put_var(p, buf, pos, cap);
@@ -138,3 +141,4 @@ size_t renderTemplate(const char* tpl, char* buf, size_t cap) {
 }
 
 }  // namespace OutputVars
+}  // namespace corium

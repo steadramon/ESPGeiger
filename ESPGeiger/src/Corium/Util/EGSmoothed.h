@@ -17,8 +17,6 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Same file in ESPGeiger-Gadget, keep in sync
-
 #pragma once
 
 #include <stdint.h>
@@ -28,7 +26,6 @@ class EGRingAvg {
 public:
   EGRingAvg() { reset(); _window = MaxN; }
 
-  // resets state
   void begin(uint16_t window = MaxN) {
     if (window < 1)    window = 1;
     if (window > MaxN) window = MaxN;
@@ -37,25 +34,29 @@ public:
   }
 
   void reset() {
-    _value = (T)0;
+    _sum   = (T)0;
     _pos   = 0;
     _count = 0;
     for (uint16_t i = 0; i < MaxN; i++) _buf[i] = (T)0;
   }
 
   void add(T value) {
-    _value     -= _buf[_pos];
+    _sum       -= _buf[_pos];
     _buf[_pos]  = value;
-    _value     += value;
+    _sum       += value;
     if (++_pos >= _window) _pos = 0;
     if (_count < _window)  _count++;
   }
 
   T get() const {
-    return _count ? (T)(_value / (T)_count) : (T)0;
+    return _count ? (T)(_sum / (T)_count) : (T)0;
   }
 
-  T sum() const { return _value; }
+  float mean() const {
+    return _count ? (float)_sum / (float)_count : 0.0f;
+  }
+
+  T sum() const { return _sum; }
 
   T last() const {
     if (_count == 0) return (T)0;
@@ -79,13 +80,13 @@ public:
 
 private:
   T        _buf[MaxN];
-  T        _value;        // sum
+  T        _sum;
   uint16_t _window;
   uint16_t _pos;
   uint16_t _count;
 };
 
-// mean until factor samples, then EMA
+// Plain mean until there are factor samples, then EMA
 template<typename T>
 class EGEma {
 public:

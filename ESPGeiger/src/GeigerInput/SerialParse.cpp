@@ -29,6 +29,7 @@ static inline bool is_printable(char c) {
   const unsigned char u = (unsigned char)c;
   return u >= 0x20 && u <= 0x7E;
 }
+static bool count_ok(int32_t v) { return v >= 0 && v <= SERIAL_MAX_COUNT; }
 
 bool common_validate(const char* in, size_t len) {
   if (!in || len == 0) return false;
@@ -52,8 +53,8 @@ bool parse_gc10(const char* in, int* out_cpm, int* /*out_cps*/) {
   // not sscanf, it wraps
   int32_t cpm;
   const char* end;
-  if (!parse_i32(in, &cpm, &end)) return false;
-  if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
+  if (!parseI32(in, &cpm, &end)) return false;
+  if (!count_ok(cpm)) return false;
   *out_cpm = (int)cpm;
   return true;
 }
@@ -68,10 +69,10 @@ static bool cp_tag(const char* p, char c) {
   return p[0] == 'C' && p[1] == 'P' && p[2] == c && p[3] == ',';
 }
 
-// as %d, too big is -1. nullptr = no number
+// Like %d, too big gives -1, nullptr if there's no number
 static const char* scan_int(const char* p, int32_t* v) {
   const char* end;
-  if (parse_i32(p, v, &end)) return end;
+  if (parseI32(p, v, &end)) return end;
   p = skip_ws(p);
   if (*p == '+' || *p == '-') p++;
   if (!is_digit(*p)) return nullptr;
@@ -88,24 +89,32 @@ bool parse_mightyohm(const char* in, int* out_cpm, int* out_cps) {
   if (!cp_tag(p, 'S') || !(p = scan_int(p + 4, &cps)) || *p != ',') return false;
   p = skip_ws(p + 1);
   if (!cp_tag(p, 'M') || !scan_int(p + 4, &cpm)) return false;
-  if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
-  // bound cps too, it goes in the counter
-  if (out_cps && cps >= 0 && cps <= SERIAL_MAX_COUNT) *out_cps = (int)cps;
+  if (!count_ok(cpm)) return false;
+  // Bound cps too since it goes into the counter. A minute's count can't be under its second's
+  bool cps_ok = count_ok(cps);
+  if (cps_ok && cps > cpm) return false;
+  if (out_cps && cps_ok) *out_cps = (int)cps;
   *out_cpm = (int)cpm;
   return true;
+}
+
+static const char* skip_sep(const char* p) {
+  while (*p == ':' || *p == ',' || *p == '=' || *p == ' ' || *p == '\t') p++;
+  return p;
 }
 
 // "CPM: 123", "CPM=123", "CPS,4"
 static bool parse_label_value(const char* in, char tag, int* out) {
   for (const char* p = in; p[0] && p[1] && p[2]; p++) {
     if (p[0] == 'C' && p[1] == 'P' && p[2] == tag) {
-      p += 3;
-      while (*p == ':' || *p == ',' || *p == '=' || *p == ' ' || *p == '\t') p++;
+      p = skip_sep(p + 3);
       if (*p != '-' && !is_digit(*p)) return false;
-      // still present, -1 fails the bounds
+      // A number that won't parse still counts as present, -1 then fails the bounds check
       int32_t v;
       const char* end;
-      *out = parse_i32(p, &v, &end) ? (int)v : -1;
+      if (!parseI32(p, &v, &end)) v = -1;
+      else if (tag == 'S' && *end == '.') return false;   // "CPS: 0.37" is a rate, not a count
+      *out = (int)v;
       return true;
     }
   }
@@ -122,21 +131,21 @@ static bool parse_labelled(const char* in, int* out_cpm, int* out_cps, bool loos
     while (*p && !is_digit(*p)) p++;
     int32_t v;
     const char* end;
-    if (!*p || !parse_i32(p, &v, &end)) return false;
+    if (!*p || !parseI32(p, &v, &end)) return false;
     cpm = (int)v;
   }
-  if (cpm < 0 || cpm > SERIAL_MAX_COUNT) return false;
+  if (!count_ok(cpm)) return false;
   *out_cpm = cpm;
   if (out_cps) {
     int cps = 0;
-    if (parse_label_value(in, 'S', &cps) && cps >= 0 && cps <= SERIAL_MAX_COUNT) {
+    if (parse_label_value(in, 'S', &cps) && count_ok(cps)) {
       *out_cps = cps;
     }
   }
   return true;
 }
 
-// needs the label, boot logs share the uart
+// Needs the label, boot logs share the uart
 bool parse_espgeiger(const char* in, int* out_cpm, int* out_cps) {
   return parse_labelled(in, out_cpm, out_cps, false);
 }

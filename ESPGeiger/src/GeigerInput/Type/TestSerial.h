@@ -20,29 +20,26 @@
 #define GEIGERTESTSRL_H
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-
-// before GeigerInputTest.h
-#ifndef GEIGER_TXPIN
-#define GEIGER_TXPIN 12
-#endif
-
 #include "SerialPort.h"
 #include "GeigerInput/GeigerInputTest.h"
 
-class GeigerTestSerial : public GeigerInputTest
+// a line a second on TX, RX read back to the log
+class GeigerTestSerial final : public GeigerInputTest
 {
   public:
     GeigerTestSerial();
-    void begin();
-    void loop();
-    void secondTicker();
+    void begin() override;
+    void loop() override;
+    void secondTicker() override;
   private:
     void pullSerial();
     void handleSerial(char* input);
+    void send_line();
 
-    char _serial_buffer[64];
-    uint8_t _serial_idx = 0;
-    uint16_t _idle_skip = 5;  // scaled to baud in begin()
+    char _buf[64];
+    uint8_t _pos = 0;
+    bool _send = false;   // set by the tick, loop() writes the line
+    uint8_t _idle_ms = 1;  // scaled to baud in begin()
     uint8_t _serial_type = GEIGER_SERIALTYPE;
 };
 #endif

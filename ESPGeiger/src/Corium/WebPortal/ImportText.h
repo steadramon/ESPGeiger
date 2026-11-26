@@ -17,31 +17,55 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef IMPORTTEXT_H
-#define IMPORTTEXT_H
+#ifndef CORIUM_IMPORTTEXT_H
+#define CORIUM_IMPORTTEXT_H
 
 #include <stddef.h>
 #include <stdint.h>
+#include "App/AppConfig.h"
+#include "Corium/Prefs/Prefs.h"
 
+// Export blob head and its base64, set both. The app sets its own
+#ifndef CORIUM_EXPORT_MAGIC
+#define CORIUM_EXPORT_MAGIC     0x08, 0xE4, 0x48
+#define CORIUM_EXPORT_MAGIC_B64 "CORI"
+#endif
+#ifndef CORIUM_EXPORT_SEED
+#define CORIUM_EXPORT_SEED 0x434F5249u   // xor keystream seed, also used for the crc
+#endif
+
+namespace corium {
 namespace ImportText {
 
 // false = skipped
 typedef bool (*PutFn)(const char* mid, const char* key, const char* value);
 
-// first_skip: line number from 1, 0 = none
-struct Result { int applied; int skipped; int first_skip; };
+// firstSkip is the line number from 1, 0 = none
+struct Result {
+  int applied;
+  int skipped;
+  int firstSkip;
+  char firstKey[2 * CORIUM_PREF_ID_MAX + 2];
+};
 
-// export blobs always start ESPG
-bool is_blob(const char* text, size_t len);
+// Start of a blob past leading blanks, nullptr = not a blob
+const char* blobStart(const char* text, size_t len);
 
-// # comments and blank lines ignored
+// # comments and blank lines are ignored
 Result apply(const char* text, size_t len, PutFn put);
 
-// blob records from the group count on; nullptr = ok, else why (PROGMEM)
-const char* blob_error(const uint8_t* p, size_t len);
-// puts done, -1 = bad records
-int apply_blob(const uint8_t* p, size_t len, PutFn put);
+// Records are a group count, then per group len+mid and a pref count, then per pref len+key and be16 len+value
+// nullptr = ok, else why (PROGMEM)
+const char* blobError(const uint8_t* p, size_t len);
+// applied -1 = bad records
+Result applyBlob(const uint8_t* p, size_t len, PutFn put);
+
+// An export's first group, one row (PROGMEM)
+extern const char BOARD_MID[];
+// "" = an older export without one
+void blobBoard(const uint8_t* p, size_t len, char* out, size_t cap);
 
 }
+}  // namespace corium
 
 #endif

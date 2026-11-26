@@ -25,8 +25,8 @@ The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/co
 | `ESPGeiger-<device_id> CPM` | CPM | Current CPM value | `30.0` | 60 s |
 | `ESPGeiger-<device_id> CPM5` | CPM | 5-minute smoothed CPM | `30.0` | 60 s |
 | `ESPGeiger-<device_id> CPM15` | CPM | 15-minute smoothed CPM | `30.0` | 60 s |
-| `ESPGeiger-<device_id> µSv/h` | µSv/h | μSv/h value | `0.10` | 60 s |
-| `ESPGeiger-<device_id> HV` | V | High-voltage reading - ESPGeiger-HW only | `400.1` | 60 s |
+| `ESPGeiger-<device_id> µSv/h` | µSv/h | µSv/h value | `0.10` | 60 s |
+| `ESPGeiger-<device_id> HV` | V | High-voltage reading - builds with HV feedback (ESPGeiger-HW, `*_hv`) | `400.1` | 60 s |
 | `ESPGeiger-<device_id> Temperature` | °C | Temperature in °C - [environment sensor](/configuration/env) only | `22.4` | 60 s |
 | `ESPGeiger-<device_id> Humidity` | % | Relative humidity in % - BME280 / AHT family only | `45.6` | 60 s |
 | `ESPGeiger-<device_id> Pressure` | hPa | Atmospheric pressure in hPa - BME280 / BMP280 only | `1013.2` | 60 s |
@@ -34,9 +34,11 @@ The MQTT discovery topic can be adjusted within the ESPGeiger [Config pages](/co
 
 <!-- /gen -->
 
+HV, Temperature, Humidity and Pressure show `unknown` in Home Assistant when their reading drops out (sensor lost or turned off), rather than holding the last value.
+
 ## Threshold alerts (binary sensors)
 
-Triggered when CPM crosses the configured warning / alert thresholds. Consumed via `value_template` from `tele/sensor` JSON. Good targets for HA automations (notifications, lights, sirens).
+Read from the `tele/sensor` JSON (Serial Connected from `tele/status`). Warning and Alert follow the configured warning / alert thresholds. Good targets for HA automations (notifications, lights, sirens).
 
 <!-- gen:ha binary -->
 
@@ -46,6 +48,8 @@ Triggered when CPM crosses the configured warning / alert thresholds. Consumed v
 | `ESPGeiger-<device_id> Alert` | CPM above configured alert threshold | `safety` | all |
 | `ESPGeiger-<device_id> Serial Connected` | Serial counter has reported within the last 60 s. | `connectivity` | serial builds |
 | `ESPGeiger-<device_id> Tube Active` | Pulses are arriving from the tube (or, on UDP builds, from the source device). Takes the place of Serial Connected, which needs an external peer. | `connectivity` | pulse, UDP and test builds |
+| `ESPGeiger-<device_id> Tube Problem` | On while Health has a tube or HV word (not the device's own): the tube has gone quiet, a storm or chatter on the input, the input isn't reporting, or the HV is out of range. | `problem` | all |
+| `ESPGeiger-<device_id> HV Fault` | HV is held off: the voltage went over the limit (duty held at minimum until settings are saved). | `problem` | HV ADC builds |
 
 <!-- /gen -->
 
@@ -57,12 +61,14 @@ Appear under the device's **Diagnostic** section in Home Assistant, not the main
 
 | Value | Unit | Description | Example | Publish Interval |
 |---|---|---|---|---|
-| `ESPGeiger-<device_id> tick` | µs | Smoothed device-load figure in µs (time in the once-per-second housekeeping pass) | `953` | 60 s |
-| `ESPGeiger-<device_id> tick max` | µs | Peak `tick` observed in last 60 s | `4870` | 60 s |
+| `ESPGeiger-<device_id> Tick` | µs | Smoothed device-load figure in µs (time in the once-per-second housekeeping pass) | `953` | 60 s |
+| `ESPGeiger-<device_id> Max Tick` | µs | Peak `Tick` in the last 60 s | `4870` | 60 s |
 | `ESPGeiger-<device_id> LPS` | 1/s | Loop iterations per second | `58733` | 60 s |
 | `ESPGeiger-<device_id> RSSI` | dBm | WiFi signal strength (dBm) | `-37` | 60 s |
 | `ESPGeiger-<device_id> Uptime` | s | Seconds since boot | `120` | 60 s |
 | `ESPGeiger-<device_id> Free Memory` | B | Free heap in bytes | `16928` | 60 s |
+| `ESPGeiger-<device_id> CPU Temperature` | °C | Chip die temperature, not ambient (ESP32 only) | `45.3` | 60 s |
+| `ESPGeiger-<device_id> Health` | | `ok`, or what is wrong, comma split: `silent`, `storm`, `chatter`, `no_input`, `hv_low`, `hv_high`, `hv_fb`, then the device: `crashed`, `noclock`, `savefail`, `lowheap` | `ok` | 60 s |
 
 <!-- /gen -->
 

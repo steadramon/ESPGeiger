@@ -1,0 +1,943 @@
+/*
+  Max7219.cpp - MAX7219 display backend (7-seg, round and LED matrix).
+
+  Copyright (C) 2026 @steadramon
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+#include "Max7219.h"
+#ifdef MAX7219_DISPLAY
+#include "App/AppConfig.h"
+#include <EGFormat.h>
+#include "Corium/System/FastMillis.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Logger/Logger.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/System/PinSafety.h"
+#include "Corium/Util/MathUtil.h"
+#include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Words.h"
+#include "Counter/Counter.h"
+#include "Counter/CounterMaths.h"
+#include "Display/Display.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
+
+
+Max7219Display max7219;
+CORIUM_REGISTER_MODULE(max7219)
+static bool s_added = Display::add(&max7219);
+
+enum { PAGE_CPM = 0, PAGE_USV = 1, PAGE_TEMP = 2, PAGE_HUM = 3, PAGE_GRAPH = 4, PAGE_VU = 5 };
+static const uint8_t MAX_PAGES = 5;
+
+static const uint8_t ARC_LEDS = 24;
+static const uint8_t ARC_REG  = Max7219Driver::REG_DIGIT0 + 4;
+static const uint8_t VU_SUB   = 16;   // 1/16 led
+
+// slow reads, see slow_reads()
+static float s_temp = NAN, s_hum = NAN;
+static float s_warn_cpm = 0, s_alert_cpm = 0;
+// On the matrix a still page only draws once a second
+static bool s_still = false;
+static bool s_redraw = true;
+
+// Reads everything every 30 s, and the shown page's value each second
+static void slow_reads(uint8_t page) {
+  static uint8_t s_age = 0;
+  bool all = s_age == 0;
+  if (++s_age >= 30) s_age = 0;
+  if (all) {
+    s_warn_cpm  = (float)corium::Prefs::getUInt("counter", EG_K_WARN);
+    s_alert_cpm = (float)corium::Prefs::getUInt("counter", EG_K_ALERT);
+    // 0 means that alarm is off, but the arc still needs a scale
+    if (!s_warn_cpm)  s_warn_cpm  = GEIGER_WARN_CPM;
+    if (!s_alert_cpm) s_alert_cpm = GEIGER_ALERT_CPM;
+  }
+  if (all || page == PAGE_TEMP) s_temp = corium::m_f(M_T);
+  if (all || page == PAGE_HUM)  s_hum  = corium::m_f(M_H);
+}
+
+// Rows, bit x = column x (made in the xantorohara editor)
+static const uint8_t MX_TREFOIL[8] PROGMEM =
+  { 0x3C, 0x18, 0x00, 0x18, 0xDB, 0xC3, 0xE7, 0x66 };
+
+// 5 wide so "123 CPM" fits in 32. Rows have LSB = top, bit 0 = left
+static const uint64_t MX_FONT_DIGITS[10] PROGMEM = {
+  0x000e1b1b1b1b1b0e, 0x001f0c0c0c0c0e0c, 0x001f03060c181b0e, 0x000e1b180e181b0e,
+  0x0018181f1b1e1c18, 0x000e1b18180f031f, 0x000e1b1b0f03060c, 0x000606060c181b1f,
+  0x000e1b1b0e1b1b0e, 0x00060c181e1b1b0e
+};
+
+// ~ = micro, ^ = degree
+static const char     MX_SYM_CHARS[]        = ".!?@~/-%^";
+static const uint64_t MX_FONT_SYMBOLS[] PROGMEM = {
+  0x000c0c0000000000,   // .
+  0x00180018183c3c18,   // !
+  0x000c000c1830331e,   // ?
+  0x001e037b7b7b633e,   // @
+  0x03063e6666660000,   // ~ micro
+  0x000103060c183060,   // /
+  0x000000003e000000,   // -
+  0x0000000000000000,   // % blank
+  0x0000000000000000,   // ^ blank
+};
+
+// MatrixChunky6 by Trip5, CC-BY, github.com/trip5/Matrix-Fonts
+static const uint64_t MX_SMALL_DIGITS[10] PROGMEM = {
+  0x0007050505070000, 0x0007020203020000, 0x0007010704070000, 0x0007040704070000,
+  0x0004040705050000, 0x0007040701070000, 0x0007050701070000, 0x0004040404070000,
+  0x0007050705070000, 0x0007040705070000
+};
+static const uint64_t MX_SMALL_LETTERS[52] PROGMEM = {
+  0x0005050705070000, 0x0007050305070000, 0x0007050105070000, 0x0007050505030000,
+  0x0007010701070000, 0x0001010701070000, 0x000f090d01070000, 0x0009090f09090000,
+  0x0007020202070000, 0x0007050404040000, 0x0005050305050000, 0x0007010101010000,
+  0x001111151b110000, 0x0009090d0b090000, 0x000f0909090f0000, 0x0001010705070000,
+  0x000b0509090f0000, 0x0005050305070000, 0x0003040701060000, 0x0002020202070000,
+  0x0007050505050000, 0x0002070505050000, 0x000a1f1515150000, 0x0005050205050000,
+  0x0002020705050000, 0x0007010204070000, 0x0007050607000000, 0x0007050701010000,
+  0x0007010107000000, 0x0007050704040000, 0x0007030507000000, 0x0002020702060000,
+  0x0604070507000000, 0x0005050701010000, 0x0007020300020000, 0x0705040400040000,
+  0x0005030505010000, 0x0007020202030000, 0x001515151f000000, 0x0005050507000000,
+  0x0007050507000000, 0x0107050507000000, 0x0407050507000000, 0x0001010507000000,
+  0x0007060107000000, 0x0006020207020000, 0x0007050505000000, 0x0002070505000000,
+  0x000a1f1515000000, 0x0005030605000000, 0x0604070505000000, 0x0007030607000000
+};
+// Same order as MX_SYM_CHARS
+static const uint64_t MX_SMALL_SYMBOLS[9] PROGMEM = {
+  0x0001000000000000, 0x0001000101010000, 0x0002000204070000, 0x0007010d0b0e0000,
+  0x0107050500000000, 0x0001010204040000, 0x0000000700000000,
+  0x0005010204050000,   // %
+  0x0000000705070000    // ^ degree
+};
+
+// false = no glyph
+static bool mxGlyph(char c, uint8_t* out8, bool small) {
+  const uint64_t* digits  = small ? MX_SMALL_DIGITS  : MX_FONT_DIGITS;
+  const uint64_t* symbols = small ? MX_SMALL_SYMBOLS : MX_FONT_SYMBOLS;
+  const uint64_t* g = nullptr;
+  if      (c >= '0' && c <= '9') g = &digits[c - '0'];
+  else if (small && c >= 'A' && c <= 'Z') g = &MX_SMALL_LETTERS[c - 'A'];
+  else if (small && c >= 'a' && c <= 'z') g = &MX_SMALL_LETTERS[26 + (c - 'a')];
+  else {
+    for (uint8_t i = 0; MX_SYM_CHARS[i]; i++)
+      if (MX_SYM_CHARS[i] == c) { g = &symbols[i]; break; }
+    if (!g) return false;
+  }
+  const uint8_t* p = (const uint8_t*)g;   // little-endian, byte y = row y
+  for (uint8_t y = 0; y < 8; y++) out8[y] = pgm_read_byte(p + y);
+  return true;
+}
+
+CORIUM_PSTR(K_DIN,      "din");
+CORIUM_PSTR(K_CS,       "cs");
+CORIUM_PSTR(K_COUNT,    "count");
+CORIUM_PSTR(K_PANELS,   "panels");
+CORIUM_PSTR(K_DECIMALS, "decimals");
+CORIUM_PSTR(K_BAR,      "bar");
+CORIUM_PSTR(K_BAR_GAIN, "bar_gain");
+CORIUM_PSTR(K_BAR_WIN,  "bar_win");
+CORIUM_PSTR(K_ORIENT,   "orient");
+CORIUM_PSTR(K_REVERSE,  "reverse");
+CORIUM_PSTR(K_POINTS,   "points");
+
+CORIUM_PSTR(MX_L_DIN, "Data pin (DIN/DIO)");
+CORIUM_PSTR(MX_L_CLK, "CLK pin");
+CORIUM_PSTR(MX_L_CS,  "CS pin");
+CORIUM_PSTR(MX_L_PTS, "TM1637 points");
+CORIUM_PSTR(MX_O_PTS, "Dots|Colon only");
+CORIUM_PSTR(MX_H_PTS, "Colon only: page letters (C U t H), the colon is the uSv/h point");
+CORIUM_PSTR(MX_L_MODE, "Pages");
+CORIUM_PSTR(MX_O_MODE, "Cycle|Fixed");
+CORIUM_PSTR(MX_H_MODE, "Cycle steps on, Fixed waits for the button");
+CORIUM_PSTR(MX_L_CNT, "Digits");
+CORIUM_PSTR(MX_L_PNL, "Panels");
+CORIUM_PSTR(MX_H_PNL, "8x8 panels in the chain");
+CORIUM_PSTR(MX_L_DEC, "uSv/h decimal places");
+CORIUM_PSTR(MX_L_BAR, "Level bar (decimal-point row)");
+CORIUM_PSTR(MX_H_BAR, "Light the decimal points as a level bar (7-seg, CPM only)");
+CORIUM_PSTR(MX_L_BGN, "Bar sensitivity");
+CORIUM_PSTR(MX_H_BGN, "Bar fills at this multiple of the recent average");
+CORIUM_PSTR(MX_L_BWN, "Bar baseline");
+CORIUM_PSTR(MX_O_BWN, "5 min|15 min");
+CORIUM_PSTR(MX_L_ORI, "Matrix module");
+CORIUM_PSTR(MX_H_ORI, "FC-16 = 4-in-1 strip, Generic = single 8x8 kit, upside down = flipped strip");
+CORIUM_PSTR(MX_O_ORI, "FC-16|Generic|FC-16 upside down|Generic upside down");
+CORIUM_PSTR(MX_L_REV, "Reverse digits");
+CORIUM_PSTR(MX_H_REV, "7-seg: for modules that show 56781234");
+
+static const corium::Pref MAX7219_PREF_ITEMS[] PROGMEM = {
+  {K_DIN,      MX_L_DIN,  nullptr,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_CLK,   MX_L_CLK,  nullptr,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_CS,       MX_L_CS,   nullptr,  "-1", nullptr, -1, MAX_GPIO_PIN, 0, corium::P_INT,  corium::P_REBOOT | corium::P_PIN_OUT},
+  {EG_K_MODE,  MX_L_MODE, MX_H_MODE, "1", MX_O_MODE, 0, 1, 0, corium::P_ENUM, 0},
+  {K_COUNT,    MX_L_CNT,  nullptr,   "8", nullptr,  1, 8,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_PANELS,   MX_L_PNL,  MX_H_PNL,  "4", nullptr,  1, Max7219Driver::MAX_CHIPS, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_DECIMALS, MX_L_DEC,  nullptr,   "2", nullptr,  0, 3,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_BAR,      MX_L_BAR,  MX_H_BAR,  "1", nullptr,  0, 1,  0, corium::P_BOOL, corium::P_ADVANCED},
+  {K_BAR_GAIN, MX_L_BGN,  MX_H_BGN,  "2", nullptr,  1, 10, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_BAR_WIN,  MX_L_BWN,  nullptr,   "1", MX_O_BWN, 0, 1,  0, corium::P_ENUM, corium::P_ADVANCED},
+  {K_ORIENT,   MX_L_ORI,  MX_H_ORI,  "0", MX_O_ORI, 0, 3,  0, corium::P_ENUM, corium::P_ADVANCED},
+  {K_REVERSE,  MX_L_REV,  MX_H_REV,  "0", nullptr,  0, 1,  0, corium::P_BOOL, corium::P_ADVANCED},
+  {K_POINTS,   MX_L_PTS,  MX_H_PTS,  "0", MX_O_PTS, 0, 1,  0, corium::P_ENUM, 0},
+};
+
+// On once DIN is set
+static const corium::PrefGroup MAX7219_PREF_GROUP PROGMEM = {
+  "max7219", "7-Seg / Matrix", 1,
+  MAX7219_PREF_ITEMS,
+  sizeof(MAX7219_PREF_ITEMS) / sizeof(MAX7219_PREF_ITEMS[0]),
+  corium::P_CAT_SYSTEM, K_DIN, 0,
+};
+
+const corium::PrefGroup* Max7219Display::prefsGroup() { return &MAX7219_PREF_GROUP; }
+
+// Which rows show for each display.type
+static const uint16_t SHOW_7SEG   = 1u << DISP_MAX7219_7SEG;
+static const uint16_t SHOW_ROUND  = 1u << DISP_MAX7219_ROUND;
+static const uint16_t SHOW_MATRIX = 1u << DISP_MAX7219_MATRIX;
+static const uint16_t SHOW_TM     = 1u << DISP_TM1637;
+static const uint16_t SHOW_MAX    = SHOW_7SEG | SHOW_ROUND | SHOW_MATRIX;
+
+static const corium::PrefShow MAX7219_SHOW[] PROGMEM = {
+  {nullptr,    EG_K_DISP_TYPE, SHOW_MAX | SHOW_TM},
+  {K_CS,       EG_K_DISP_TYPE, SHOW_MAX},
+  {K_COUNT,    EG_K_DISP_TYPE, SHOW_7SEG | SHOW_TM},
+  {K_PANELS,   EG_K_DISP_TYPE, SHOW_MATRIX},
+  {K_BAR,      EG_K_DISP_TYPE, SHOW_7SEG | SHOW_TM},
+  {K_BAR_GAIN, EG_K_DISP_TYPE, SHOW_7SEG | SHOW_TM},
+  {K_BAR_WIN,  EG_K_DISP_TYPE, SHOW_7SEG | SHOW_TM},
+  {K_ORIENT,   EG_K_DISP_TYPE, SHOW_MATRIX},
+  {K_REVERSE,  EG_K_DISP_TYPE, SHOW_7SEG},
+  {K_POINTS,   EG_K_DISP_TYPE, SHOW_TM},
+  {},
+};
+
+const corium::PrefShow* Max7219Display::prefsShow() { return MAX7219_SHOW; }
+
+// Always on the page, so always posted
+uint8_t Max7219Display::displayOrder() { return 18; }
+
+// When it isn't the chosen display there are no counts and no loop
+void Max7219Display::begin() {
+  if (display.backend() == this) {
+    corium::Registry::on(Counter::TOPIC_COUNTS, this);
+    corium::Registry::on(Display::TOPIC_POWER, this);
+    corium::Registry::every(this, LOOP_MS);
+    return;
+  }
+  corium::Registry::every(this, 0);
+}
+
+void Max7219Display::start() {
+  _layout = (uint8_t)corium::Prefs::getUInt("display", EG_K_TYPE);
+  _active = true;
+  // read at boot only, these are corium::P_REBOOT
+  _din = (int8_t)corium::Prefs::getInt("max7219", K_DIN);
+  _clk = (int8_t)corium::Prefs::getInt("max7219", EG_K_CLK);
+  _cs  = (int8_t)corium::Prefs::getInt("max7219", K_CS);
+  read_prefs();
+  apply();
+}
+
+// A display.type change waits for the reboot
+void Max7219Display::reload() {
+  apply();
+}
+
+// Nothing ticks in safe mode, so draw one frame
+void Max7219Display::safe_mode() {
+  start();
+  if (tm()) {
+    uint8_t codes[8], segs[8];
+    bool dps[8] = {};
+    memset(codes, DIGIT_DASH, sizeof(codes));
+    codesToSegs(codes, dps, _count, segs);
+    tmSend(segs, _count);
+  } else if (_layout == DISP_MAX7219_MATRIX) {
+    memset(_mfb, 0, sizeof(_mfb));
+    mxDraw(_mfb, _mfb_w, 0, "SAFE", MX_SMALL);
+    _drv.drawMatrix(_mfb, _orient);
+  } else {
+    uint8_t n = _layout == DISP_MAX7219_ROUND ? 4 : _count;
+    for (uint8_t i = 0; i < n; i++) _drv.writeDigit(i, DIGIT_DASH, false);
+  }
+}
+
+void Max7219Display::onPrefsLoaded() {
+  read_prefs();
+  if (_active) apply();
+}
+
+void Max7219Display::read_prefs() {
+  uint8_t mode = (uint8_t)corium::Prefs::getUInt("max7219", EG_K_MODE);
+  if (mode != _mode) _page = 0;   // a mode change starts back on CPM
+  _mode = mode;
+  _count = (uint8_t)corium::Prefs::getUInt("max7219",
+                                     _layout == DISP_MAX7219_MATRIX ? K_PANELS : K_COUNT);
+  _decimals = (uint8_t)corium::Prefs::getUInt("max7219", K_DECIMALS);
+  if (_decimals >= _count) _decimals = _count - 1;
+  _bar = corium::Prefs::getBool("max7219", K_BAR);
+  _bar_gain = (uint8_t)corium::Prefs::getUInt("max7219", K_BAR_GAIN);
+  _bar_win = (uint8_t)corium::Prefs::getUInt("max7219", K_BAR_WIN);
+  _orient = (uint8_t)corium::Prefs::getUInt("max7219", K_ORIENT);
+  _reverse = corium::Prefs::getBool("max7219", K_REVERSE);
+  _colon = corium::Prefs::getUInt("max7219", K_POINTS) == 1;
+}
+
+bool Max7219Display::claim_pins() {
+  const int8_t pins[] = {_din, _clk, tm() ? (int8_t)-1 : _cs};
+  for (int8_t p : pins) {
+    if (const char* why = corium::PinSafety::claimOutput(p, PSTR("Max7219"))) {
+      corium::Log::console(PSTR("MAX7219: pin=%d unsafe (%s) - disabled"), p, why);
+      return false;
+    }
+  }
+  return true;
+}
+
+static uint8_t brightness(uint8_t top) {
+  return (uint8_t)brightnessCurve(corium::Prefs::getUInt("display", EG_K_BRIGHTNESS), top);
+}
+
+void Max7219Display::applyTm() {
+  // The default 8 is for the MAX, TM1637 modules have 4
+  if (_count > Tm1637Driver::MAX_DIGITS) _count = 4;
+  if (_count < 2) _count = 2;   // a letter and a digit
+  if (_decimals >= _count) _decimals = _count - 1;
+  if (_tm_off) return;
+  _tm.begin(claim_pins() ? _clk : -1, _din);
+  set_power(display.lit());
+  if (_tm.ready() && !_swept) {
+    bootSweep();
+    _swept = true;
+    if (_tm_acked) {
+      corium::Log::console(PSTR("TM1637: Display up (clk=%d dio=%d)"), _clk, _din);
+    } else {
+      _tm_off = true;
+      corium::Log::console(PSTR("TM1637: No ack (clk=%d dio=%d), off until restart"), _clk, _din);
+    }
+  }
+}
+
+void Max7219Display::apply() {
+  if (tm()) {
+    applyTm();
+    return;
+  }
+  // Same layout, so only set the light. A re-init flickers
+  if (_drv.ready() && _layout == _set_layout && _count == _set_count) {
+    _drv.setIntensity(brightness(15));
+    return;
+  }
+  _set_layout = _layout;
+  _set_count = _count;
+  // Round uses digits 1-4 as BCD and 5-7 for the arc
+  uint8_t chips = 1;
+  uint8_t decode = 0xFF;
+  uint8_t scan = (uint8_t)(_count - 1);
+  if (_layout == DISP_MAX7219_ROUND) {
+    decode = 0x0F;
+    scan = 6;
+  } else if (_layout == DISP_MAX7219_MATRIX) {
+    _panels = _count;
+    _mfb_w = (uint16_t)_panels * 8;
+    chips = _panels;
+    decode = 0x00;
+    scan = 7;
+  }
+  int8_t din = claim_pins() ? _din : -1;
+  _drv.begin(din, _clk, _cs, chips, decode, scan);   // wakes the chip
+  set_power(display.lit());
+  _drv.setIntensity(brightness(15));
+  if (_drv.ready() && !_swept) {
+    corium::Log::console(PSTR("MAX7219: Display up (type=%u din=%d clk=%d cs=%d)"),
+                         _layout, _din, _clk, _cs);
+    bootSweep();
+    _swept = true;
+  }
+}
+
+float Max7219Display::currentCPM() {
+  return display.shown_cpm();
+}
+
+// How long each page shows in cycle mode
+#define MX_PAGE_DWELL_MS 5000UL
+
+uint8_t Max7219Display::buildPages(uint8_t* list) {
+  uint8_t n = 0;
+  if (_layout == DISP_MAX7219_ROUND)  list[n++] = PAGE_VU;   // round starts on VU
+  list[n++] = PAGE_CPM;
+  list[n++] = PAGE_USV;
+  if (_layout == DISP_MAX7219_MATRIX) list[n++] = PAGE_GRAPH;
+  if (!isnan(s_temp)) list[n++] = PAGE_TEMP;
+  if (!isnan(s_hum))  list[n++] = PAGE_HUM;
+  return n;
+}
+
+void Max7219Display::updatePage() {
+  uint8_t list[MAX_PAGES];
+  uint8_t n = buildPages(list);
+  if (_page >= n) _page = 0;
+  if (_mode == MX_CYCLE) {
+    unsigned long now = corium::fastMillis();
+    if ((now - _page_ms) >= MX_PAGE_DWELL_MS) {
+      _page = (uint8_t)((_page + 1) % n);
+      _page_ms = now;
+    }
+  }
+  _cur_page = list[_page];
+}
+
+void Max7219Display::update_power() {
+  if (display.lit() != _lit) set_power(display.lit());
+}
+
+// With no pins it stays lit for /screen
+void Max7219Display::set_power(bool on) {
+  if (!(tm() ? _tm.ready() : _drv.ready())) return;
+  _lit = on;
+  s_redraw = true;
+  if (tm()) { if (!_tm_off) _tm.light(brightness(7), on); }
+  else      _drv.shutdown(!on);
+}
+
+void Max7219Display::onButtonTap(unsigned long now, int8_t dir) {
+  s_redraw = true;
+  if (_fx_on) _fx_on = false;
+  else        nextPage(dir);
+  showNow();
+}
+
+void Max7219Display::nextPage(int8_t dir) {
+  uint8_t list[MAX_PAGES];
+  uint8_t n = buildPages(list);
+  if (n <= 1) return;
+  _page = (uint8_t)((_page + (dir > 0 ? 1 : n - 1)) % n);
+  _page_ms = corium::fastMillis();
+  _cur_page = list[_page];
+}
+
+// The matrix redraws on its next pass, digits redraw now rather than at the next second
+void Max7219Display::showNow() {
+  if (_layout == DISP_MAX7219_MATRIX) {
+    corium::Registry::post(this);
+    return;
+  }
+  if (!_active || !_lit || !(tm() ? _tm.ready() : _drv.ready())) return;
+  if (tm() && (_tm_off || !_tm_acked)) return;
+  drawDigits();
+}
+
+// unit from the env.unit pref
+static const char* temp_unit() {
+  uint8_t u = corium::m_temp_unit();
+  if (u == corium::MT_F) return PSTR("^F");
+  if (u == corium::MT_K) return PSTR("K");
+  return PSTR("^C");
+}
+
+void Max7219Display::pageInfo(uint8_t page, float& value, uint8_t& dec, const char*& unit) {
+  switch (page) {
+    case PAGE_USV:  value = display.usv(); dec = _decimals; unit = PSTR("~Sv/h"); break;
+    case PAGE_TEMP: value = corium::m_celsius_to(s_temp, corium::m_temp_unit()); dec = 1; unit = temp_unit(); break;
+    case PAGE_HUM:  value = s_hum;         dec = 0;         unit = PSTR("%");     break;
+    default:        value = currentCPM(); dec = value < 10.0f ? 1 : 0; unit = PSTR("CPM"); break;   // same as the OLED
+  }
+}
+
+uint8_t Max7219Display::adaptiveLevel(uint8_t top) {
+  if (display.alert()) return top;
+  float cur  = currentCPM();
+  float base = _bar_win == 0 ? display.cpm5() : display.cpm15();
+  float full = base * (float)_bar_gain;
+  const float MIN_FULL = 20.0f;   // cpm
+  if (full < MIN_FULL) full = MIN_FULL;
+  int lvl = CounterMaths::to_int((cur / full) * (float)top);
+  return lvl > top ? top : (uint8_t)lvl;
+}
+
+void Max7219Display::pushNumber(uint8_t first_digit, uint8_t ndigits, float value,
+                                uint8_t decimals, uint8_t dp_bar_level) {
+  uint8_t codes[8];
+  bool    dps[8];
+  computeDigits(value, ndigits, decimals, dp_bar_level, codes, dps);
+  for (uint8_t i = 0; i < ndigits; i++) {
+    uint8_t d = _reverse ? (uint8_t)(ndigits - 1 - i) : i;
+    _drv.writeDigit(first_digit + d, codes[i], dps[i]);
+  }
+}
+
+// Indexed by PAGE_*
+static const uint8_t PAGE_LETTER[] = { SEG_C, SEG_U, SEG_t, SEG_H };
+
+// for the TM1637 and /screen
+void Max7219Display::pageSegs(uint8_t* segs) {
+  float v; uint8_t dec; const char* u;
+  pageInfo(_cur_page, v, dec, u);
+  if (tm() && _colon) {
+    dec = _cur_page == PAGE_USV ? (uint8_t)(_count - 2) : 0;   // point on the colon
+    letteredSegs(PAGE_LETTER[_cur_page], v, _count, dec, segs);
+    return;
+  }
+  uint8_t dp_bar = (_bar && _cur_page == PAGE_CPM) ? adaptiveLevel(_count) : 0;
+  uint8_t codes[8];
+  bool    dps[8];
+  computeDigits(v, _count, dec, dp_bar, codes, dps);
+  codesToSegs(codes, dps, _count, segs);
+}
+
+void Max7219Display::tmSend(const uint8_t* segs, uint8_t n) {
+  bool ok = _tm.show(segs, n);
+  if (!ok && _tm_acked) corium::Log::console(PSTR("TM1637: No ack, check wiring and power"));
+  _tm_acked = ok;
+  if (ok) {
+    _tm_fails = 0;
+  } else if (++_tm_fails >= TM_GIVE_UP) {
+    _tm_off = true;
+    corium::Log::console(PSTR("TM1637: No ack, off until restart"));
+  }
+}
+
+// The arc is in regs 5-7, filled from the top
+void Max7219Display::pushArc(uint8_t level) {
+  for (uint8_t s = 0; s < 3; s++) {
+    int k = clamp((int)level - 8 * (int)s, 0, 8);
+    uint8_t fill = k ? (uint8_t)(0xFF << (8 - k)) : 0;
+    _drv.write(0, ARC_REG + s, fill);
+  }
+}
+
+void Max7219Display::render7seg() {
+  if (tm()) {
+    uint8_t segs[8];
+    pageSegs(segs);
+    tmSend(segs, _count);
+    return;
+  }
+  float v; uint8_t dec; const char* u;
+  pageInfo(_cur_page, v, dec, u);
+  uint8_t dp_bar = (_bar && _cur_page == PAGE_CPM) ? adaptiveLevel(_count) : 0;
+  pushNumber(0, _count, v, dec, dp_bar);
+}
+
+bool Max7219Display::vu() const {
+  return _layout == DISP_MAX7219_ROUND && _cur_page == PAGE_VU;
+}
+
+// On the round board digit 0 is the left one
+void Max7219Display::roundDigits(float v, uint8_t dec) {
+  uint8_t codes[4];
+  bool    dps[4];
+  computeDigits(v, 4, dec, 0, codes, dps);
+  for (uint8_t i = 0; i < 4; i++) _drv.writeDigit(3 - i, codes[i], dps[i]);
+}
+
+void Max7219Display::renderRound() {
+  float v; uint8_t dec; const char* u;
+  pageInfo(_cur_page, v, dec, u);   // VU page shows CPM
+  roundDigits(v, dec);
+  if (!vu()) pushArc(arcLevel());   // on the VU page loop() moves the arc
+}
+
+// 6 green, 9 orange, 9 red, scaled to warn and alert
+uint8_t Max7219Display::arcLevel() {
+  return zoneLevel(currentCPM(), s_warn_cpm, s_alert_cpm, 6, 9, 9);
+}
+
+// /screen preview for 7-seg and round
+
+static inline void fb_pix(uint8_t* fb, int W, int H, int x, int y) {
+  if (x < 0 || x >= W || y < 0 || y >= H) return;
+  fb[(y >> 3) * W + x] |= (uint8_t)(1 << (y & 7));
+}
+
+// {dx, dy, horizontal} for a-g, each 3 px long
+static const uint8_t SMALL_SEG[7][3] PROGMEM = {   // 3x5
+  {0,0,1}, {2,0,0}, {2,2,0}, {0,4,1}, {0,2,0}, {0,0,0}, {0,2,1}
+};
+static const uint8_t BIG_SEG[7][3] PROGMEM = {     // 5x9
+  {1,0,1}, {4,1,0}, {4,5,0}, {1,8,1}, {0,5,0}, {0,1,0}, {1,4,1}
+};
+
+struct Fb {
+  uint8_t* p;
+  int w, h;
+};
+
+static void draw_cell(const Fb& f, int x, int y, uint8_t seg, bool big) {
+  const uint8_t (*g)[3] = big ? BIG_SEG : SMALL_SEG;
+  for (uint8_t s = 0; s < 7; s++) {
+    if (!(seg & (1 << s))) continue;
+    int sx = x + pgm_read_byte(&g[s][0]);
+    int sy = y + pgm_read_byte(&g[s][1]);
+    bool h = pgm_read_byte(&g[s][2]);
+    for (int i = 0; i < 3; i++) fb_pix(f.p, f.w, f.h, sx + (h ? i : 0), sy + (h ? 0 : i));
+  }
+}
+
+// Colon or DP dot, in the gap after a digit
+static void draw_point(const Fb& f, int gx, int y0, bool big, bool colon) {
+  int x = big ? gx + 1 : gx;
+  if (colon) {
+    fb_pix(f.p, f.w, f.h, x, y0 + 2);
+    fb_pix(f.p, f.w, f.h, x, y0 + 6);
+  } else {
+    fb_pix(f.p, f.w, f.h, x, y0 + (big ? 8 : 4));
+  }
+}
+
+// Up to 4 digits are drawn big, any more are drawn small
+void Max7219Display::drawRep7seg(uint8_t* fb, uint16_t& w, uint16_t& h) {
+  uint8_t segs[8];
+  pageSegs(segs);
+  bool big = _count <= 4;
+  int cw = big ? 5 : 3;
+  int pitch = big ? 8 : 4;
+  w = big ? 32 : (uint16_t)(_count * 4 > 32 ? 32 : _count * 4);
+  h = big ? 16 : 8;
+  int W = w, H = h;
+  int x0 = big ? (W - (_count * pitch - 3)) / 2 : 0;
+  int y0 = big ? 3 : 0;
+  for (uint8_t p = 0; p < _count; p++) {
+    int x = x0 + p * pitch;
+    if (x + cw > W) break;
+    draw_cell({fb, W, H}, x, y0, segs[p], big);
+    if (segs[p] & 0x80) draw_point({fb, W, H}, x + cw, y0, big, tm() && _colon);
+  }
+}
+
+// 4 digits (bit 7 = DP), then how many LEDs are lit
+void Max7219Display::drawRepRound(uint8_t* fb, uint16_t& w, uint16_t& h) {
+  float v; uint8_t dec; const char* u;
+  pageInfo(_cur_page, v, dec, u);
+  uint8_t codes[4];
+  bool    dps[4];
+  computeDigits(v, 4, dec, 0, codes, dps);
+  for (uint8_t p = 0; p < 4; p++) {
+    uint8_t i = 3 - p;
+    fb[p] = (uint8_t)(codeToSeg(codes[i]) | (dps[i] ? 0x80 : 0));
+  }
+  fb[4] = vu() ? (uint8_t)(_vu.shown / VU_SUB) : arcLevel();
+  w = 5; h = 0;
+}
+
+bool Max7219Display::screenBuffer(const uint8_t*& buf, uint16_t& w, uint16_t& h) {
+  if (!_active) return false;
+  // the matrix, or 32x16 for 7-seg
+  static uint8_t s_repfb[sizeof(_mfb) > 64 ? sizeof(_mfb) : 64];
+  if (_layout == DISP_MAX7219_MATRIX) {
+    // Copy it, the async send would race the render
+    uint16_t mw = _mfb_w ? _mfb_w : (uint16_t)_panels * 8;
+    if (mw > sizeof(s_repfb)) mw = sizeof(s_repfb);
+    memcpy(s_repfb, _mfb, mw);
+    buf = s_repfb;
+    w = mw;
+    h = 8;
+    return true;
+  }
+  updatePage();
+  for (uint8_t i = 0; i < sizeof(s_repfb); i++) s_repfb[i] = 0;
+  if (_layout == DISP_MAX7219_ROUND) drawRepRound(s_repfb, w, h);
+  else                               drawRep7seg(s_repfb, w, h);
+  buf = s_repfb;
+  return true;
+}
+
+// Lamp test, the chip can't be probed
+void Max7219Display::bootSweep() {
+  if (tm()) {
+    // the TM1637 can, it acks
+    uint8_t all[Tm1637Driver::MAX_DIGITS];
+    memset(all, 0xFF, sizeof(all));
+    _tm_acked = _tm.show(all, _count);
+    delay(300);
+    return;
+  }
+  if (_layout == DISP_MAX7219_ROUND) {   // round has its own, no all-on
+    roundBoot();
+    return;
+  }
+  _drv.writeAll(Max7219Driver::REG_DISPLAYTEST, 0x01);
+  delay(300);
+  _drv.writeAll(Max7219Driver::REG_DISPLAYTEST, 0x00);
+  if (_layout == DISP_MAX7219_MATRIX) {
+    drawMatrixIcon(MX_TREFOIL);
+    delay(900);
+    memset(_mfb, 0, sizeof(_mfb));
+    _drv.drawMatrix(_mfb, _orient);
+  }
+}
+
+void Max7219Display::pushArcMask(uint32_t mask) {
+  for (uint8_t s = 0; s < 3; s++) {
+    uint8_t b = 0;
+    for (uint8_t j = 0; j < 8; j++) {
+      if (mask & (1UL << (8 * s + j))) b |= (uint8_t)(0x80 >> j);
+    }
+    _drv.write(0, ARC_REG + s, b);
+  }
+}
+
+// Raw segments with no decode, A-F go round the edge
+static const uint8_t SPIN[6] = { 0x40, 0x20, 0x10, 0x08, 0x04, 0x02 };
+// a, ab, abc ... abcdefg
+static const uint8_t BUILD[8] = { 0x00, 0x40, 0x60, 0x70, 0x78, 0x7C, 0x7E, 0x7F };
+
+// Comet, then a needle sweep
+void Max7219Display::roundBoot() {
+  _drv.setDecode(0x00);
+  for (uint8_t head = 0; head < ARC_LEDS + 3; head++) {
+    pushArcMask((0x7UL << head >> 2) & 0xFFFFFFUL);   // 3 led tail
+    for (uint8_t p = 0; p < 4; p++) _drv.write(0, Max7219Driver::REG_DIGIT0 + p, SPIN[(head + p) % 6]);
+    delay(20);
+  }
+  // dots at 0, 25, 50, 75%
+  auto frame = [this](uint8_t l) {
+    pushArc(l);
+    for (uint8_t p = 0; p < 4; p++) {
+      _drv.write(0, Max7219Driver::REG_DIGIT0 + p,
+                 (uint8_t)(BUILD[l * 7 / ARC_LEDS] | (l >= p * (ARC_LEDS / 4) ? 0x80 : 0)));
+    }
+  };
+  for (uint8_t l = 0; l <= ARC_LEDS; l++) { frame(l); delay(10 + l); }   // slows near the top
+  delay(300);
+  for (int l = ARC_LEDS; l >= 0; l--) { frame((uint8_t)l); delay(16); }
+  _drv.setDecode(0x0F);
+  roundDigits(0, 0);
+}
+
+static const unsigned long VU_GAP_MS = 1000;
+
+// Once a stamp is past its window keep it just past, while dark or off the page,
+// so a wrap can't bring it back
+static void hold_expired(unsigned long now, unsigned long& stamp, unsigned long ms) {
+  if (now - stamp > ms) stamp = now - ms - 1;
+}
+
+void Max7219Display::second() {
+  if (!_active) return;
+  unsigned long now = corium::fastMillis();
+  hold_expired(now, _page_ms, MX_PAGE_DWELL_MS);
+  hold_expired(now, _vu_ms, VU_GAP_MS);
+  slow_reads(_cur_page);
+  s_redraw = true;   // /screen draws the matrix without pins too
+  if (!(tm() ? _tm.ready() : _drv.ready())) return;
+  if (!tm()) _drv.heal();
+  if (_layout == DISP_MAX7219_MATRIX || !_lit) return;
+  // With no ack, try again every 10 s
+  if (tm() && (_tm_off || (!_tm_acked && ++_tm_wait_s < TM_RETRY_S))) return;
+  _tm_wait_s = 0;
+  drawDigits();
+}
+
+void Max7219Display::drawDigits() {
+  updatePage();
+  if (_layout == DISP_MAX7219_ROUND) renderRound();
+  else                               render7seg();
+}
+
+void Max7219Display::matrixValueUnit(char* val, size_t val_cap, char* unit, size_t unit_cap) {
+  float v; uint8_t dec; const char* u;
+  pageInfo(_cur_page, v, dec, u);
+  if (dec == 0) snprintf_P(val, val_cap, W_FMT_D, CounterMaths::to_int(v));
+  else          format_f(val, val_cap, v, dec);
+  flashToRam(u, unit, unit_cap);
+}
+
+// works without pins, for /screen
+void Max7219Display::renderMatrixContent(unsigned long now) {
+  _mfb_w = (uint16_t)_panels * 8;
+  if (_mfb_w > sizeof(_mfb)) _mfb_w = sizeof(_mfb);
+  memset(_mfb, 0, _mfb_w);
+  int W = _mfb_w;
+  s_still = true;
+  if (_cur_page == PAGE_GRAPH) {
+    int hist[sizeof(_mfb)];
+    int n = (int)egm_history(hist, (size_t)W);
+    // Tenths, with bars at least 1 cpm tall, same as the OLED
+    if (display.tenths(hist, (uint16_t)n) == 10) barColumns(hist, n, _mfb, W, 10);
+    else                                        barColumns(hist, n, _mfb, W);
+    return;
+  }
+
+  char value[16], unit[8];
+  matrixValueUnit(value, sizeof(value), unit, sizeof(unit));
+
+  const int gap = 2;
+  int val_w  = mxWidth(value, MX_BIG);
+  int unit_w = mxWidth(unit, MX_SMALL);
+  int tot_w  = val_w + gap + unit_w;
+
+  if (tot_w <= W) {                           // right aligned, unit stays put
+    mxDraw(_mfb, W, W - tot_w, value, MX_BIG);
+    mxDraw(_mfb, W, W - unit_w, unit, MX_SMALL);
+    _scroll_x = 0;
+    return;
+  }
+  s_still = false;
+  if (val_w <= W) {                           // value fits alone, alternate with the unit
+    bool show_unit = ((now / 2500) & 1);
+    if (show_unit) mxDraw(_mfb, W, (W - unit_w) / 2, unit,  MX_SMALL);
+    else           mxDraw(_mfb, W, (W - val_w)  / 2, value, MX_BIG);
+    _scroll_x = 0;
+    return;
+  }
+  int xe = mxDraw(_mfb, W, _scroll_x, value, MX_BIG);  // too wide, scroll
+  mxDraw(_mfb, W, xe + gap, unit, MX_SMALL);
+  if (--_scroll_x <= -(tot_w + 2)) _scroll_x = W;
+}
+
+void Max7219Display::drawMatrixIcon(const uint8_t* rows8) {
+  int x0 = (_mfb_w - 8) / 2;
+  memset(_mfb, 0, sizeof(_mfb));
+  for (int y = 0; y < 8; y++) {
+    uint8_t r = pgm_read_byte(&rows8[y]);
+    for (int x = 0; x < 8; x++)
+      if (r & (1 << x)) _mfb[x0 + x] |= (uint8_t)(1 << y);
+  }
+  _drv.drawMatrix(_mfb, _orient);
+}
+
+static bool glyph_span(const uint8_t* g, int& first, int& last) {
+  first = 7; last = 0;
+  for (int y = 0; y < 8; y++)
+    for (int b = 0; b < 8; b++)
+      if (g[y] & (1 << b)) { if (b < first) first = b; if (b > last) last = b; }
+  return first <= last;
+}
+
+static void blit_glyph(uint8_t* fb, int W, int x, const uint8_t* g, int first, int last) {
+  for (int y = 0; y < 8; y++)
+    for (int b = first; b <= last; b++) {
+      int px = x + (b - first);
+      if ((g[y] & (1 << b)) && px >= 0 && px < W) fb[px] |= (uint8_t)(1 << y);
+    }
+}
+
+// Digits are fixed width, the rest proportional
+int Max7219Display::mxText(uint8_t* fb, int W, int x, const char* s, bool draw, bool small) {
+  const int digit_w = small ? 3 : 5;   // widest in each font
+  int start = x;
+  while (*s) {
+    char c = *s++;
+    uint8_t g[8];
+    int first, last;
+    if (c == ' ') { x += (small ? 2 : 3); continue; }
+    if (!mxGlyph(c, g, small) || !glyph_span(g, first, last)) { x += 3; continue; }
+    int w = last - first + 1;
+    int pad = 0;
+    if (c >= '0' && c <= '9' && w < digit_w) {
+      pad = (digit_w - w) / 2;
+      w = digit_w;
+    }
+    if (draw) blit_glyph(fb, W, x + pad, g, first, last);
+    x += w + 1;
+  }
+  return x > start ? x - 1 : x;
+}
+
+void Max7219Display::loop(unsigned long now) {
+  uint16_t ev = corium::Registry::events(this);
+  if (ev & (1u << Display::TOPIC_POWER)) update_power();
+  if (ev & (1u << Counter::TOPIC_COUNTS)) second();
+  if (!_active || !_lit) return;
+  if (vu()) vuFrame();
+  if (_layout != DISP_MAX7219_MATRIX) return;
+  if (!_fx_on && s_still && !s_redraw) return;
+  s_redraw = false;
+  updatePage();
+  if (_fx_on) fxFrame(_mfb_w);
+  else        renderMatrixContent(now);   // for /screen too
+  _drv.drawMatrix(_mfb, _orient);   // no-op without pins
+}
+
+void Max7219Display::fx(unsigned long now) {
+  if (_fx_on || _layout != DISP_MAX7219_MATRIX) {
+    onButtonTap(now, 1);
+    return;
+  }
+  s_redraw = true;
+  _fx_on = true;
+  _fx_part = 0;
+  _fx = 0;
+  corium::Registry::post(this);
+}
+
+void Max7219Display::vuFrame() {
+  uint32_t blip = display.blip();
+  unsigned long now = corium::fastMillis();
+  bool back = now - _vu_ms > VU_GAP_MS;   // page was just shown, no kick for the backlog
+  _vu_ms = now;
+  // blip is the last click's stamp, so one kick a frame at most
+  uint32_t counts = !back && blip != _vu_blip;
+  _vu_blip = blip;
+  float kick = 0;
+  if (counts) {
+    kick = 8 * VU_SUB;   // one count, 8 LEDs at most
+    float per_frame = currentCPM() * LOOP_MS / 60000.0f;
+    if (per_frame > 1) per_frame = 1;
+    // At the last green LED the level falls 9 a frame
+    if (per_frame > 0 && 9 / per_frame < kick) kick = 9 / per_frame;
+  }
+  vuStep(_vu, counts, kick, 3 * VU_SUB, ARC_LEDS * VU_SUB);
+  pushArc((uint8_t)(_vu.shown / VU_SUB));
+}
+
+static const uint8_t SINE16[64] PROGMEM = {
+  8, 8, 9, 10, 10, 11, 12, 12, 13, 13, 14, 14, 14, 15, 15, 15,
+  15, 15, 15, 15, 14, 14, 14, 13, 13, 12, 12, 11, 10, 10, 9, 8,
+  8, 7, 6, 5, 5, 4, 3, 3, 2, 2, 1, 1, 1, 0, 0, 0,
+  0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 5, 5, 6, 7
+};
+
+static uint8_t wave(int i) { return pgm_read_byte(&SINE16[i & 63]); }
+
+void Max7219Display::fxFrame(int W) {
+  memset(_mfb, 0, sizeof(_mfb));
+  if (_fx_part == 1) fxPlasma(W);
+  else if (fxScroll(W)) {
+    _fx_part = 1;
+    _fx = 0;
+  }
+  _fx++;
+}
+
+bool Max7219Display::fxScroll(int W) {
+  char text[12];
+  flashToRam(APP_NAME, text, sizeof(text));
+  int x = W - (int)_fx;
+  int end = mxDraw(_mfb, W, x, text, MX_SMALL);
+  for (int c = 0; c < W; c++) {
+    int off = wave(c * 4 + _fx * 3) / 6 - 1;
+    _mfb[c] = off > 0 ? (uint8_t)(_mfb[c] << off) : (uint8_t)(_mfb[c] >> -off);
+  }
+  return end < 0;
+}
+
+void Max7219Display::fxPlasma(int W) {
+  int t = _fx / 2;
+  for (int x = 0; x < W; x++) {
+    uint8_t col = 0;
+    for (int y = 0; y < 8; y++) {
+      int v = wave(x * 5 + t * 2) + wave(y * 9 - t) + wave(x * 3 + y * 7 + t * 3);
+      if (v > 23) col |= (uint8_t)(1 << y);
+    }
+    _mfb[x] = col;
+  }
+}
+
+#endif

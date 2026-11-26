@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// 8N1 rx sampled in the NMI, a spinning sw serial trips "dev 1163"
-// no hw here, host tested, times CCOUNT, lengths cpu cycles
+// 8N1 rx sampled in the NMI, a spinning sw serial trips the wifi assert
+// No hw here, times are CCOUNT, lengths cpu cycles
 
 #ifndef EG_TIMER1_RX_H
 #define EG_TIMER1_RX_H
@@ -47,7 +47,7 @@ __attribute__((always_inline)) inline void egrx_start(EGT1Rx& r, uint32_t entry,
   r.cur = 0;
   r.first = 1;
   r.next = entry - lat + r.cpb + r.cpb / 2 - bias;
-  // NMI may run between stores, on goes last
+  // The NMI may run between stores, so on goes last
   __asm__ __volatile__("" ::: "memory");
   r.on = 1;
 }
@@ -60,7 +60,7 @@ __attribute__((always_inline)) inline uint8_t egrx_sample(EGT1Rx& r, bool v, uin
     return EGRX_LATE;
   }
   if (r.bitn <= 8) {
-    r.cur = (uint8_t)((r.cur >> 1) | (v ? 0x80 : 0));
+    r.cur = (uint8_t)((r.cur >> 1) | (v ? 0x80 : 0));   // lsb first
     r.bitn++;
     r.next += r.cpb;
     return EGRX_NEXT;
@@ -74,7 +74,7 @@ __attribute__((always_inline)) inline uint8_t egrx_sample(EGT1Rx& r, bool v, uin
   return EGRX_BYTE;
 }
 
-// already low: edge is at latest the stop bit end
+// Already low, so the edge was at the end of the stop bit at the latest
 __attribute__((always_inline)) inline void egrx_resync(EGT1Rx& r, uint32_t t, uint32_t now,
                                                        bool waited, uint32_t bias) {
   uint32_t edge = now;

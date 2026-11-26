@@ -20,17 +20,21 @@
 #define GEIGERINPUTTEST_H
 
 #include <Arduino.h>
+#include <atomic>
 #include "GeigerInput.h"
+#include "Corium/Platform/Chip.h"
 
+// ms per target cpm step
 #ifndef GEIGER_TESTPULSE_ADJUSTTIME
 #define GEIGER_TESTPULSE_ADJUSTTIME 300000
 #endif
 
+// us, also the shortest gap
 #ifndef GEIGER_PULSE_WIDTH
 #define GEIGER_PULSE_WIDTH 500
 #endif
 
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
 // 3.2 us units, EGTimer1 takes them << 8
 #define GEIGER_TEST_TIMER_DIV 312500
 #define GEIGER_TEST_TICK_SHIFT 8
@@ -43,6 +47,7 @@ extern volatile int _pulse_width_us;
 extern volatile uint32_t _pulse_width_ticks;
 void set_pulse_width_us(int us);
 
+// Poisson pulses at a target cpm
 class GeigerInputTest : public GeigerInput
 {
   public:
@@ -61,19 +66,22 @@ class GeigerInputTest : public GeigerInput
     unsigned long _last_pulse_test = 0;
     double _remainder = 0;
     double generatePoissonRand(double lambda);
-    // timer side, stamp only, count in loop()
-    static void IRAM_ATTR timerPulse();
-    // every pass, keep inline
-    static void countTimerPulses() { if (_tp_head != _tp_tail) drainTimerPulses(); }
+    // Timer side only stamps, the count is done in loop()
+    static void CORIUM_ISR_ATTR timerPulse();
+    // Runs every pass so keep it inline. Relaxed, so no memw a pass
+    static void countTimerPulses() {
+      if (_tp_head.load(std::memory_order_relaxed) != _tp_tail.load(std::memory_order_relaxed))
+        drainTimerPulses();
+    }
     static void drainTimerPulses();
     int collect() override;
-    static volatile uint8_t _tp_head;   // handler
-    static volatile uint8_t _tp_tail;   // loop
+    static std::atomic<uint8_t> _tp_head;   // handler
+    static std::atomic<uint8_t> _tp_tail;   // loop
   protected:
     bool _retarget = false;
   private:
     float _target_cps = 0;
-    int _current_selection = -1;
+    int _step = -1;
     bool _manual = false;
 };
 #endif

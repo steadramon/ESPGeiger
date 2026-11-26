@@ -33,15 +33,16 @@
 #ifndef EG_RX_GPIO_LAT
 #define EG_RX_GPIO_LAT 480
 #endif
-// cycles early, the NMI is only ever late
+// Aim this many cycles early, the NMI is only ever late
 #ifndef EG_RX_BIAS
 #define EG_RX_BIAS 120
 #endif
 static constexpr uint32_t RX_EARLY_TICKS = 200;
-// slower baud, the pin isr catches the next start bit
+// At a slower baud the pin isr catches the next start bit
 static constexpr uint32_t RX_SPIN_MAX_TICKS = 1000;
 static constexpr uint32_t RX_RING = 256;
 static_assert((RX_RING & (RX_RING - 1)) == 0, "ring size must be a power of two");
+static constexpr uint32_t GPC_INT_MASK = 0xFu << GPCI;
 #endif
 
 // EG_TIMER1_STATS delays the gpio isrs
@@ -82,10 +83,10 @@ static constexpr uint8_t PASSES = 8;
 
 static constexpr uint32_t POST_TIMEOUT_US = 2000;
 
-// shorter = 0 % or 100 %
+// a shorter phase becomes 0 % or 100 %
 static constexpr uint32_t MIN_PHASE_US = 2;
 
-// hot bytes first, not volatile, main uses vload/vstore
+// Hot bytes first. Not volatile, main uses vload/vstore
 struct Gen {
   uint8_t pwm_on;
   uint8_t idle = 1;       // timer not armed
@@ -131,8 +132,9 @@ struct Gen {
 };
 static Gen g;
 
-template <typename T> static inline T vload(const T& x) { return *(const volatile T*)&x; }
-template <typename T> static inline void vstore(T& x, T v) { *(volatile T*)&x = v; }
+// IRAM callers too
+template <typename T> static inline __attribute__((always_inline)) T vload(const T& x) { return *(const volatile T*)&x; }
+template <typename T> static inline __attribute__((always_inline)) void vstore(T& x, T v) { *(volatile T*)&x = v; }
 
 static uint8_t s_pwm_pin = 0xFF;
 static uint32_t s_seq;
@@ -147,6 +149,16 @@ static uint32_t s_rx_tail;      // main side only
 // O2, every callee always_inline, so no call leaves IRAM
 #pragma GCC push_options
 #pragma GCC optimize("O2")
+
+static inline __attribute__((always_inline)) uint32_t spin_until(uint32_t due) {
+  uint32_t t;
+  while ((int32_t)(due - (t = ccount())) > 0) {}
+  return t;
+}
+
+static inline __attribute__((always_inline)) uint32_t pwm_window(uint8_t x2) {
+  return (g.pwm.high ? SPIN_TICKS : EGT1_LEAD_TICKS) << x2;
+}
 
 static inline __attribute__((always_inline)) void on_edge(uint8_t action, uint32_t t,
                                                           uint32_t due) {
@@ -183,6 +195,7 @@ static inline __attribute__((always_inline)) void on_edge(uint8_t action, uint32
 }
 
 #ifdef EG_SERIAL_NMI
+// NMI owns the head, main the tail. When full the byte is dropped
 static inline __attribute__((always_inline)) void rx_push(uint8_t b) {
   uint32_t h = g.rx_head;
   if (h - vload(s_rx_tail) < RX_RING) {
@@ -198,14 +211,13 @@ static inline __attribute__((always_inline)) void rx_push(uint8_t b) {
 static inline __attribute__((always_inline)) void rx_listen() {
   if (g.rx_paused) return;
   GPIEC = g.rx_bit;
-  GPC(g.rx_pin) = (GPC(g.rx_pin) & ~(0xFu << GPCI)) | ((uint32_t)FALLING << GPCI);
+  GPC(g.rx_pin) = (GPC(g.rx_pin) & ~GPC_INT_MASK) | ((uint32_t)FALLING << GPCI);
 }
 
 static inline __attribute__((always_inline)) void rx_service() {
   uint32_t t = g.rx.next;
   if ((int32_t)(t - ccount()) > (int32_t)g.rx_window) return;
-  uint32_t now;
-  while ((int32_t)(t - (now = ccount())) > 0) {}
+  uint32_t now = spin_until(t);
   bool v = (GPI >> g.rx_pin) & 1;
   uint8_t a = egrx_sample(g.rx, v, now - t);
   if (a == EGRX_NEXT) return;
@@ -215,6 +227,7 @@ static inline __attribute__((always_inline)) void rx_service() {
     return;
   }
   rx_push(g.rx.cur);
+  // At a fast baud watch one bit for the next start, else go back to the edge irq
   bool high = true, waited = false;
   if (g.rx_spin) {
     uint32_t until = t + g.rx.cpb;
@@ -236,14 +249,14 @@ static inline __attribute__((always_inline)) void rx_service() {
 
 static inline __attribute__((always_inline)) uint8_t pwm_pass(uint8_t x2) {
   uint32_t due;
-  uint32_t window = (g.pwm.high ? SPIN_TICKS : EGT1_LEAD_TICKS) << x2;
+  uint32_t window = pwm_window(x2);
   uint8_t a = egt1_pwm_step(g.pwm, g.mb, ccount(), x2, window, &due);
   if (a != EGT1_PWM_RISE && a != EGT1_PWM_FALL) return a;
   uint32_t t = ccount();
 #ifdef EG_TIMER1_STATS
   int32_t slack = (int32_t)(due - t);
 #endif
-  while ((int32_t)(due - (t = ccount())) > 0) {}
+  t = spin_until(due);
   on_edge(a, t, due);
   if (a == EGT1_PWM_RISE) egt1_pwm_fall_from(g.pwm, t, x2);
   else egt1_pwm_late(g.pwm, t - due, x2);
@@ -264,6 +277,7 @@ static inline __attribute__((always_inline)) void tmr_pass(uint32_t now, uint8_t
     g.tmr_on = 0;
     return;
   }
+  // cap so the x2 shift stays a signed span
   if (r > (0x7FFFFFFFu >> x2)) r = 0x7FFFFFFFu >> x2;
   r <<= x2;
   g.tmr_next += r;
@@ -299,8 +313,8 @@ static inline __attribute__((always_inline)) void finish(uint32_t t0, uint32_t d
 }
 
 static inline __attribute__((always_inline)) bool edge_pass(uint32_t t0, uint8_t x2) {
-  uint32_t due, t;
-  uint32_t window = (g.pwm.high ? SPIN_TICKS : EGT1_LEAD_TICKS) << x2;
+  uint32_t due;
+  uint32_t window = pwm_window(x2);
   uint8_t a = egt1_pwm_step(g.pwm, g.mb, ccount(), x2, window, &due);
   if (a == EGT1_PWM_FALL) {
     uint32_t d = egt1_arm(true, g.pwm.next, false, 0, due, x2);
@@ -308,7 +322,7 @@ static inline __attribute__((always_inline)) bool edge_pass(uint32_t t0, uint8_t
     int32_t slack = (int32_t)(due - ccount());
     if (slack > 0) g.spin_sum += (uint32_t)slack;
 #endif
-    while ((int32_t)(due - (t = ccount())) > 0) {}
+    uint32_t t = spin_until(due);
     on_edge(a, t, due);
     reg_write(T1L, d);
     egt1_pwm_late(g.pwm, t - due, x2);
@@ -317,7 +331,7 @@ static inline __attribute__((always_inline)) bool edge_pass(uint32_t t0, uint8_t
     return true;
   }
   if (a != EGT1_PWM_RISE) return false;
-  while ((int32_t)(due - (t = ccount())) > 0) {}
+  uint32_t t = spin_until(due);
   on_edge(a, t, due);
   egt1_pwm_fall_from(g.pwm, t, x2);
   g.idle = 0;
@@ -445,9 +459,11 @@ static bool patch_nmi_vector() {
   if ((w0 & 0x00FFFFFF) != 0x0013D300) return false;   // wsr.excsave3 a0
   if (((w0 >> 24) & 0x3F) != 0x05) return false;      // call0
   uint32_t target = (uint32_t)egt1_nmi_entry;
+  // call0 at byte 3, lands at 0x40100024 + off * 4, off 18 bit signed
   int32_t off = ((int32_t)target - 0x40100024) >> 2;
   if ((target & 3) || off < -(1 << 17) || off >= (1 << 17)) return false;
   uint32_t insn = 0x05u | (((uint32_t)off & 0x3FFFF) << 6);
+  // 3 byte insn spans both words
   uint32_t ps = xt_rsil(15);
   v[0] = (w0 & 0x00FFFFFF) | (insn << 24);
   v[1] = (w1 & 0xFFFF0000) | (insn >> 8);
@@ -484,16 +500,28 @@ static inline void IRAM_ATTR kick() {
   if (vload(g.idle) || T1V > EGT1_LEAD_TICKS) timer1_write(EGT1_LEAD_TICKS);
 }
 
+static inline __attribute__((always_inline)) void kick_now() {
+  uint32_t ps = xt_rsil(15);
+  kick();
+  xt_wsr_ps(ps);
+}
+
 #ifdef EG_SERIAL_NMI
-// CHANGE, the core drops a late FALLING
+// On CHANGE, as the core drops a late FALLING
 static void IRAM_ATTR rx_on_start() {
   uint32_t entry = ccount();
-  GPC(g.rx_pin) &= ~(0xFu << GPCI);
+  GPC(g.rx_pin) &= ~GPC_INT_MASK;
   if (vload(g.rx.on)) return;
   egrx_start(g.rx, entry, EG_RX_GPIO_LAT, EG_RX_BIAS);
   int32_t d = (int32_t)(g.rx.next - (RX_EARLY_TICKS << g.x2) - ccount()) >> g.x2;
   if (d < (int32_t)EGT1_LEAD_TICKS) d = EGT1_LEAD_TICKS;
   if (vload(g.idle) || T1V > (uint32_t)d) timer1_write((uint32_t)d);
+}
+
+static void listen_now() {
+  uint32_t ps = xt_rsil(15);
+  rx_listen();
+  xt_wsr_ps(ps);
 }
 #endif
 
@@ -516,11 +544,13 @@ static bool IRAM_ATTR post(uint8_t op, uint32_t mask, uint32_t high, uint32_t lo
   g.cmd.run = run;
   g.cmd.ok = 0;
   g.cmd_seq = seq;
+  // op last, the NMI reads it first
   __asm__ __volatile__("" ::: "memory");
   g.cmd.op = op;
   kick();
   xt_wsr_ps(ps);
   while ((int32_t)(vload(g.done) - seq) < 0) {
+    // timed out, take the cmd back if the NMI hasn't
     if (ccount() - t0 >= s_post_limit) {
       ps = xt_rsil(15);
       if (vload(g.cmd_seq) == seq) g.cmd.op = EGT1_CMD_NONE;
@@ -532,10 +562,10 @@ static bool IRAM_ATTR post(uint8_t op, uint32_t mask, uint32_t high, uint32_t lo
   return (vload(g.ok_bits) >> (seq & 31)) & 1;
 }
 
-// whole core waveform API, missing one = duplicate symbol
+// The whole core waveform API, leaving one out is a duplicate symbol
 extern "C" {
 
-int startWaveformClockCycles(uint8_t pin, uint32_t high, uint32_t low, uint32_t run,  // NOLINT(mixed-case,complexity) core API
+int startWaveformClockCycles(uint8_t pin, uint32_t high, uint32_t low, uint32_t run,  // core API
                              int8_t, uint32_t, bool) {
   if (pin > 16 || isFlashInterfacePin(pin) || pin == s_pwm_pin) return false;
   init_timer();
@@ -547,10 +577,13 @@ int startWaveformClockCycles(uint8_t pin, uint32_t high, uint32_t low, uint32_t 
     else drive(bit, 0);
     return true;
   }
+  if (high > EGT1_MAX_SPAN) high = EGT1_MAX_SPAN;
+  if (low > EGT1_MAX_SPAN) low = EGT1_MAX_SPAN;
+  if (run > EGT1_MAX_SPAN) run = EGT1_MAX_SPAN;
   return post(EGT1_CMD_START, bit, high, low, run);
 }
 
-int startWaveform(uint8_t pin, uint32_t high_us, uint32_t low_us, uint32_t run_us,  // NOLINT(mixed-case,complexity) core API
+int startWaveform(uint8_t pin, uint32_t high_us, uint32_t low_us, uint32_t run_us,  // core API
                   int8_t align, uint32_t offset_us, bool auto_pwm) {
   return startWaveformClockCycles(pin, microsecondsToClockCycles(high_us),
                                   microsecondsToClockCycles(low_us),
@@ -558,18 +591,18 @@ int startWaveform(uint8_t pin, uint32_t high_us, uint32_t low_us, uint32_t run_u
                                   microsecondsToClockCycles(offset_us), auto_pwm);
 }
 
-IRAM_ATTR int stopWaveform(uint8_t pin) {  // NOLINT(mixed-case) core API
+IRAM_ATTR int stopWaveform(uint8_t pin) {  // core API
   if (pin > 16 || !(vload(g.soft_mask) & (1u << pin))) return false;
   return post(EGT1_CMD_STOP, 1u << pin, 0, 0, 0);
 }
 
 // refused, nothing else gets Timer1
-void setTimer1Callback(uint32_t (*fn)()) { (void)fn; }  // NOLINT(mixed-case) core API
+void setTimer1Callback(uint32_t (*fn)()) { (void)fn; }  // core API
 
 // false = analogWrite uses the waveform path
-void _setPWMFreq(uint32_t freq) { (void)freq; }  // NOLINT(mixed-case) core API
-IRAM_ATTR bool _stopPWM(uint8_t pin) { (void)pin; return false; }  // NOLINT(mixed-case) core API
-bool _setPWM(int pin, uint32_t val, uint32_t range) {  // NOLINT(mixed-case) core API
+void _setPWMFreq(uint32_t freq) { (void)freq; }  // core API
+IRAM_ATTR bool _stopPWM(uint8_t pin) { (void)pin; return false; }  // core API
+bool _setPWM(int pin, uint32_t val, uint32_t range) {  // core API
   (void)pin; (void)val; (void)range;
   return false;
 }
@@ -578,7 +611,7 @@ bool _setPWM(int pin, uint32_t val, uint32_t range) {  // NOLINT(mixed-case) cor
 
 namespace EGTimer1 {
 
-// no flag = link error, not silent
+// Without the flag it's a link error, not silent
 #ifdef EG_TIMER1_PWM
 // GPIO16 isn't on GPOS/GPOC
 bool pwm_begin(uint8_t pin) {
@@ -601,9 +634,7 @@ bool pwm_begin(uint8_t pin) {
   g.pwm.next = ccount() + (START_TICKS << g.x2);
   __asm__ __volatile__("" ::: "memory");
   vstore(g.pwm_on, (uint8_t)1);
-  uint32_t ps = xt_rsil(15);
-  kick();
-  xt_wsr_ps(ps);
+  kick_now();
   return true;
 }
 
@@ -613,7 +644,7 @@ void pwm_set(uint32_t freq, uint32_t duty, uint32_t range) {
   egt1_pwm_post(g.mb, period, on);
 }
 
-// the pin stays refused till reboot
+// The pin stays refused until reboot
 void pwm_stop() {
   // pwm_on first, so the NMI leaves the pin low
   vstore(g.pwm_on, (uint8_t)0);
@@ -629,9 +660,7 @@ uint32_t entries() { return vload(g.entries); }
 void restart() {
   if (!s_init) return;
   arm_timer();
-  uint32_t ps = xt_rsil(15);
-  kick();
-  xt_wsr_ps(ps);
+  kick_now();
 }
 
 void timer_start(uint32_t (*fn)(), uint32_t first) {
@@ -639,12 +668,11 @@ void timer_start(uint32_t (*fn)(), uint32_t first) {
   init_timer();
   vstore(g.tmr_on, (uint8_t)0);
   g.tmr_fn = fn;
+  if (first > (EGT1_MAX_SPAN >> g.x2)) first = EGT1_MAX_SPAN >> g.x2;
   g.tmr_next = ccount() + (first << g.x2);
   __asm__ __volatile__("" ::: "memory");
   vstore(g.tmr_on, (uint8_t)1);
-  uint32_t ps = xt_rsil(15);
-  kick();
-  xt_wsr_ps(ps);
+  kick_now();
 }
 
 void timer_stop() { vstore(g.tmr_on, (uint8_t)0); }
@@ -715,16 +743,14 @@ bool rx_begin(int8_t pin, uint32_t baud) {
   if (vload(g.pwm_on)) return false;   // pwm has the precise channel
   init_timer();
   uint32_t cpu = ESP.getCpuFreqMHz() * 1000000UL;
-  g.rx.cpb = (cpu + baud / 2) / baud;
+  g.rx.cpb = (cpu + baud / 2) / baud;   // rounded
   g.rx_window = (2 * RX_EARLY_TICKS) << g.x2;
   g.rx_spin = (g.rx.cpb >> g.x2) <= RX_SPIN_MAX_TICKS;
   g.rx_pin = (uint8_t)pin;
   g.rx_bit = 1u << pin;
   pinMode(pin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(pin), rx_on_start, CHANGE);
-  uint32_t ps = xt_rsil(15);
-  rx_listen();
-  xt_wsr_ps(ps);
+  listen_now();
   return true;
 }
 
@@ -733,6 +759,7 @@ int rx_available() { return (int)(vload(g.rx_head) - s_rx_tail); }
 int rx_read() {
   uint32_t t = s_rx_tail;
   if (vload(g.rx_head) == t) return -1;
+  __asm__ __volatile__("" ::: "memory");   // the byte after the head, never hoisted above it
   uint8_t b = s_rx_ring[t & (RX_RING - 1)];
   vstore(s_rx_tail, t + 1);
   return b;
@@ -740,15 +767,13 @@ int rx_read() {
 
 void rx_pause() {
   vstore(g.rx_paused, (uint8_t)1);
-  GPC(g.rx_pin) &= ~(0xFu << GPCI);
+  GPC(g.rx_pin) &= ~GPC_INT_MASK;
   vstore(g.rx.on, (uint8_t)0);
 }
 
 void rx_resume() {
   vstore(g.rx_paused, (uint8_t)0);
-  uint32_t ps = xt_rsil(15);
-  rx_listen();
-  xt_wsr_ps(ps);
+  listen_now();
 }
 
 void rx_stats(RxStats* out) {

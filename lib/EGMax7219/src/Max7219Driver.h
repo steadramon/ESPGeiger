@@ -41,9 +41,11 @@ class Max7219Driver {
     void write(uint8_t chip, uint8_t reg, uint8_t val);   // chip 0 = nearest
     void writeAll(uint8_t reg, uint8_t val);
 
-    void writeDigit(uint8_t index, uint8_t code, bool dp);
+    void writeDigit(uint8_t index, uint8_t code, bool dp);   // chip 0, index 0..7
 
+    enum : uint8_t { ORIENT_FC16, ORIENT_GENERIC, ORIENT_FC16_FLIP, ORIENT_GENERIC_FLIP };
     // byte per column, bit y = row y, orient 0..3 = 0/90/180/270
+    // cols holds chips() * 8 bytes
     void drawMatrix(const uint8_t* cols, uint8_t orient);
 
     static constexpr uint8_t MAX_CHIPS = 8;
@@ -52,14 +54,15 @@ class Max7219Driver {
     void setDecode(uint8_t mask);
     void shutdown(bool off);
     void refresh();   // every setup register again
-    // one setup register and one row a call
+    // One setup register and one row per call, puts back anything a glitch lost
     void heal();
 
     uint8_t chips() const { return _chips; }
-    bool ready() const { return _ready; }
+    bool ready() const { return _ready; }   // false = a pin unset, calls do nothing
 
   private:
     static constexpr uint8_t SETUP_REGS = 5;
+    void shiftByte(uint8_t b);
     void shiftFrame(uint8_t reg, uint8_t val);
     void sendSetup(uint8_t i);
     void sendRow(uint8_t r);

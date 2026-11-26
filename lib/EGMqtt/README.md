@@ -1,6 +1,6 @@
 # EGMqtt
 
-MQTT 3.1.1 client for ESP8266 and ESP32, run from the main loop on EGTcpConn.
+MQTT 3.1.1 client for ESP8266 and ESP32, run from the main loop on EGTcp.
 QoS 0, 1 and 2, callbacks from `loop()`, no TLS. `EGMqttWire` builds and
 parses the packets on its own, with no I/O.
 
@@ -33,4 +33,5 @@ void loop() {
 
 Reconnecting is up to the caller, `onDisconnect` says why it went. Buffer
 sizes are `EGMQTT_OUT_CAP`, `EGMQTT_IN_CAP`, `EGMQTT_QOS2_IN` and
-`EGMQTT_STR_CAP`, see `EGMqtt.h`.
+`EGMQTT_STR_CAP`, see `EGMqtt.h`. `EGMQTT_MAX_QOS`, `EGMQTT_CHECK_TEXT` and
+`EGMQTT_SUB_LOST` turn off what an app doesn't use.

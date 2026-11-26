@@ -37,19 +37,20 @@ class EGLed {
     EGLed(uint8_t pin, bool low_active = false);
     void attach(uint8_t pin, bool low_active);   // once, for a pin known later
 
-    static void setClock(MillisFn fn);
+    static void setClock(MillisFn fn);   // same as EGClock::set, for all libs
 
-    void blink(uint16_t on_ms, uint16_t off_ms);
+    // loop only, update() runs the timing
+    void blink(uint16_t on_ms, uint16_t off_ms);   // one on/off cycle
     void pulse(uint16_t on_ms);
     void blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count);   // 0 stops
-    void fade(uint8_t shift);   // bigger shift = slower
+    void fade(uint8_t shift);   // from brightness down, bigger shift = slower
     void on();    // steady
     void off();
     void update();   // 1 kHz or every loop
 
     bool isRunning() const { return _state != IDLE; }
 
-    void setBrightness(uint8_t level) { _brightness = level; }
+    void setBrightness(uint8_t level) { _brightness = level; }   // 0-255, from the next write
 
   private:
     enum : uint8_t { IDLE = 0, PHASE_ON = 1, PHASE_OFF = 2, PHASE_FADE = 3 };

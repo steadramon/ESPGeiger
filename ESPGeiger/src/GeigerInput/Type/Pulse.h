@@ -24,52 +24,41 @@
 #include "GeigerInput/GeigerInput.h"
 #include "Pcnt.h"
 
-#ifdef USE_PCNT
-#define PCNT_PULL_FLOATING 0
-#define PCNT_PULL_UP       1
-#define PCNT_PULL_DOWN     2
-#if defined(PCNT_PULLUP_PIN)
-#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_UP
-#elif defined(PCNT_PULLDOWN_PIN)
-#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_DOWN
-#else
-#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_FLOATING
-#endif
-#endif
-
 #ifndef GEIGER_MODEL
 #define GEIGER_MODEL "genpulse"
 #endif
 
-class GeigerPulse : public GeigerInput
+// interrupt or PCNT
+class GeigerPulse final : public GeigerInput
 {
   public:
     GeigerPulse();
-    void begin();
+    void begin() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
-    bool has_pcnt() override {
-#ifdef USE_PCNT
-      return true;
-#else
-      return false;
+#ifdef COUNT_SELFTEST
+    corium::MeasureRows measurements() override;
 #endif
-    }
-#ifndef USE_PCNT
+#ifndef PCNT_SELECTABLE
     void secondTicker() override { checkIsrStorm(); }
-#endif
-#ifdef USE_PCNT
-    int collect();
-    // 50 Hz
+#else
+    bool has_pcnt() override { return _pcnt; }
+    void use_pcnt(bool on) override { _pcnt = on; }
+    void secondTicker() override { if (!_pcnt) checkIsrStorm(); }
+    int collect() override;
+    void loop() override;
+    static constexpr uint32_t DRAIN_MS = 20;   // 50 Hz
     void drain_pcnt();
-    void set_pcnt_filter(int val);
-    void apply_pcnt_filter();
-    void set_pin_pull(int mode);   // 0=floating, 1=up, 2=down
+    void set_pcnt_filter(int val) override;
+    void apply_pcnt_filter() override;
+    void set_pin_pull(int mode) override;   // 0=floating, 1=up, 2=down
   private:
-    uint16_t _pcnt_filter = 0;          // 0-1023
+    bool     _pcnt = true;              // false = interrupt
+    uint16_t _pcnt_filter = 0;          // 0-1023 APB cycles, 12.5 ns each
     uint8_t  _pin_pull = PCNT_PIN_PULL_DEFAULT;
-    int8_t   _pin_pull_last_logged = -1;        // -1 = not logged
-    uint32_t _last_drain_us = 0;
+    int8_t   _pull_logged = -1;        // -1 = not logged
+    int64_t  _last_drain_us = 0;      // esp_timer, no wrap
+    uint32_t _pushed = 0;              // into the ring this second
 #endif
 };
 #endif

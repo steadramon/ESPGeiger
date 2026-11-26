@@ -7,6 +7,7 @@ import collections
 import difflib
 import json
 import os
+import struct
 import sys
 
 LIB = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,16 +36,41 @@ LICENCE = """/*
 # must match EGTimeZone.cpp
 FNV_PRIME = 16777619
 OFFSET_BASIS = 2166136261
-HASH_MASK = 0x1FFFFF
+HASH_BITS = 17
+RULE_BITS = 7
+SEEDS = 256
 
 SKIP_DIRS = {"right", "posix"}
 SKIP_NAMES = {"posixrules", "Factory", "localtime"}
 
-def fnv_hash(name):
-    h = OFFSET_BASIS
+# footer = the rule after the last transition. Morocco's is 2087's, +01 till then;
+# Palestine's (2086) is right outside Ramadan, kept
+NOW_RULE = {"Africa/Casablanca": "<+01>-1", "Africa/El_Aaiun": "<+01>-1",
+            "Asia/Gaza": "EET-2EEST,M3.4.4/50,M10.4.4/50",
+            "Asia/Hebron": "EET-2EEST,M3.4.4/50,M10.4.4/50"}
+Y2038 = 2145916800   # 2038-01-01 UTC
+
+def fnv_hash(name, seed):
+    h = OFFSET_BASIS ^ seed
     for b in name.encode():
         h = ((h ^ b) * FNV_PRIME) & 0xFFFFFFFF
-    return h & HASH_MASK
+    return h & ((1 << HASH_BITS) - 1)
+
+
+def pick_seed(zones, rules):
+    """First seed where no two zones share a hash with different rules, and no
+    rule typed in raw hits a zone with another rule."""
+    for seed in range(SEEDS):
+        by = {}
+        ok = True
+        for name, rule in zones.items():
+            h = fnv_hash(name, seed)
+            if by.setdefault(h, rule) != rule:
+                ok = False
+                break
+        if ok and all(by.get(fnv_hash(r, seed), r) == r for r in rules):
+            return seed, by
+    sys.exit("no seed under %d; widen the hash here and in EGTimeZone.cpp" % SEEDS)
 
 
 def find_source():
@@ -69,8 +95,22 @@ def posix_rule(path):
     return parts[1].decode("ascii")
 
 
+def last_transition(path):
+    """The v2+ block's last transition time, or None."""
+    with open(path, "rb") as f:
+        data = f.read()
+    isut, isstd, leap, n, types, chars = struct.unpack(">6l", data[20:44])
+    v2 = 44 + n * 5 + types * 6 + chars + leap * 8 + isstd + isut
+    n = struct.unpack(">l", data[v2 + 32:v2 + 36])[0]
+    if not n:
+        return None
+    at = v2 + 44 + (n - 1) * 8
+    return struct.unpack(">q", data[at:at + 8])[0]
+
+
 def collect(root):
     zones = {}
+    late = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
         for fn in filenames:
@@ -79,8 +119,15 @@ def collect(root):
             path = os.path.join(dirpath, fn)
             name = os.path.relpath(path, root)
             rule = posix_rule(path)
-            if rule:
-                zones[name] = rule
+            if not rule:
+                continue
+            if name in NOW_RULE:
+                rule = NOW_RULE[name]
+            elif (last_transition(path) or 0) >= Y2038:
+                late.append(name)
+            zones[name] = rule
+    if late:
+        sys.exit("footer is a rule after 2037, add to NOW_RULE: %s" % ", ".join(sorted(late)))
     # os.walk order varies
     return dict(sorted(zones.items()))
 
@@ -105,21 +152,15 @@ def render_json(zones, root, version):
 
 def render(zones, version):
     rules = sorted(set(zones.values()))
-    offset, at = {}, 0
-    for rule in rules:
-        offset[rule] = at
-        at += len(rule) + 1
-    if at > 2048:
-        sys.exit("rule blob is %d B; the offset field is 11 bits" % at)
+    if len(rules) >= 1 << RULE_BITS:
+        sys.exit("%d rules; the rule field is %d bits" % (len(rules), RULE_BITS))
+    index = {r: i for i, r in enumerate(rules)}
+    seed, by = pick_seed(zones, rules)
 
-    entries = sorted((fnv_hash(n), offset[r], n) for n, r in zones.items())
-    dupes = collections.Counter(h for h, _, _ in entries)
-    clash = [h for h, c in dupes.items() if c > 1]
-    if clash:
-        for h in clash:
-            print("collision %d: %s" % (h, [n for x, _, n in entries if x == h]),
-                  file=sys.stderr)
-        sys.exit("hash collision; widen the hash field here and in EGTimeZone.cpp")
+    names = collections.defaultdict(list)
+    for n, r in zones.items():
+        names[fnv_hash(n, seed)].append(n)
+    entries = sorted((h, index[r], " ".join(sorted(names[h]))) for h, r in by.items())
 
     out = [LICENCE]
     add = out.append
@@ -129,21 +170,25 @@ def render(zones, version):
     add("// IANA tzdb %s. Rerun tools/gen_timezones.py; never edit." % version)
     add("// Included only by EGTimeZone.cpp.")
     add("")
-    add("// NUL separated; zones[].offset indexes into this.")
+    add("// NUL separated; zones[] rule n is the nth")
     add("static const char TZ_RULES[] PROGMEM =")
     for rule in rules:
         add('  "%s\\0"' % rule)
     add("  ;")
     add("")
+    add("static const uint32_t TZ_SEED = %d;" % seed)
+    add("")
+    add("// %d bit hash, %d bit rule, big endian" % (HASH_BITS, RULE_BITS))
+    add("#define TZ(h, r) { (uint8_t)((h) >> 9), (uint8_t)((h) >> 1), (uint8_t)((h) << 7 | (r)) }")
+    add("")
     add("// Sorted by hash for binary search.")
-    add("PROGMEM static const struct TZoneH {")
-    add("  uint32_t hash   : 21;")
-    add("  uint32_t offset : 11;")
-    add("} zones[] = {")
-    width = max(len("{%d, %d}," % (h, o)) for h, o, _ in entries)
-    for h, o, name in entries:
-        add("    %-*s // %s" % (width, "{%d, %d}," % (h, o), name))
+    add("PROGMEM static const uint8_t zones[][3] = {")
+    width = max(len("TZ(%d, %d)," % (h, r)) for h, r, _ in entries)
+    for h, r, name in entries:
+        add("    %-*s // %s" % (width, "TZ(%d, %d)," % (h, r), name))
     add("};")
+    add("")
+    add("#undef TZ")
     add("")
     add("#endif")
     return "\n".join(out) + "\n", rules, entries
@@ -201,10 +246,10 @@ def main():
     open(HEADER, "w").write(text)
     open(ZONES_JSON, "w").write(data)
     print("tzdb %s" % version)
-    print("device: %d zones, %d unique rules" % (len(entries), len(rules)))
+    print("device: %d zones, %d rows, %d unique rules" % (len(zones), len(entries), len(rules)))
     blob = sum(len(r) + 1 for r in rules)
-    print("flash:  zones %d B + rule blob %d B = %d B (offset field allows 2048)"
-          % (len(entries) * 4, blob, len(entries) * 4 + blob))
+    print("flash:  zones %d B + rule blob %d B = %d B"
+          % (len(entries) * 3, blob, len(entries) * 3 + blob))
     return 0
 
 

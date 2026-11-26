@@ -19,36 +19,27 @@
 
 #include "Counter.h"
 #include <new>
-#if GEIGER_TYPE == GEIGER_TYPE_PULSE
-#include "GeigerInput/Type/Pulse.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-#include "GeigerInput/Type/Serial.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
-#include "GeigerInput/Type/UdpRx.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TEST
-#include "GeigerInput/Type/Test.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-#include "GeigerInput/Type/TestPulse.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-#include "GeigerInput/Type/TestSerial.h"
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
-#include "GeigerInput/Type/TestPulseInt.h"
-#endif
+#include <string.h>
+#include "GeigerInput/InputType.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
+#include "App/AppKeys.h"
+#include "App/Health.h"
 #include "Corium/Output/LedSignal.h"
-#include "Corium/Util/MathUtil.h"
+#include "BlipLed/BlipLed.h"
 #include "Corium/System/RtcMap.h"
-#ifdef ESP32
-#include <esp_attr.h>
-#endif
+#include "Corium/Util/Attr.h"
 #include "Corium/System/Lifecycle.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Uptime.h"
 #include "Corium/System/Clock.h"
 #include "TickClock.h"
-#include "App/ClickHooks.h"
+#include "GRNG/GRNG.h"
+
+#ifndef ESPG_WARMUP_S
+#define ESPG_WARMUP_S 10
+#endif
 
 Counter gcounter;
 
@@ -57,66 +48,110 @@ constexpr uint32_t RTC_STASH_S     = 30;
 constexpr uint32_t LIFETIME_SAVE_S = 6 * 3600;
 constexpr uint16_t PULSE_RING_SIZE = 256;
 constexpr uint16_t PULSE_RING_MASK = PULSE_RING_SIZE - 1;
+constexpr uint32_t PULSE_AGE_MAX_US = 70UL * 60UL * 1000000UL;   // under the 71.6 min micros() wrap
+// CPM_60S and CPM_FAST stop at max age or max pulses, whichever comes first
+constexpr uint32_t FIXED_US = 60UL * 1000000UL;
+constexpr uint16_t FIXED_N  = 64;
+constexpr uint32_t FAST_US  = 5UL * 1000000UL;
+constexpr uint16_t FAST_N   = 19;
+constexpr uint8_t  EMA5_S   = 5;
+constexpr uint8_t  EMA15_S  = 3 * EMA5_S;
 static_assert((PULSE_RING_SIZE & PULSE_RING_MASK) == 0, "must be power of 2");
 volatile uint32_t* s_pulse_ring   = nullptr;
 volatile uint16_t  s_pulse_head   = 0;
 volatile uint16_t  s_pulse_count  = 0;
 volatile uint32_t  s_min_pulse_us = UINT32_MAX;
 volatile uint32_t  s_prev_pulse_us = 0;
-// isr owns the histogram once set
+// Set once the ISR fills the histogram, loop() leaves it alone after that
 volatile bool      s_hist_from_isr = false;
-#ifdef ESP32
-portMUX_TYPE s_pulse_mux = portMUX_INITIALIZER_UNLOCKED;
-#endif
+corium::IsrLock::Mux s_pulse_mux;
 
+// Zeroed by calloc before the ISR can see it, swapped in under the lock
 void ensure_pulse_ring() {
   if (s_pulse_ring) return;
-  s_pulse_ring = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
-  if (!s_pulse_ring) Log::console(PSTR("Counter: pulse ring alloc failed"));
+  volatile uint32_t* r = (volatile uint32_t*)calloc(PULSE_RING_SIZE, sizeof(uint32_t));
+  if (!r) {
+    corium::Log::console(PSTR("Counter: Pulse ring alloc failed"));
+    return;
+  }
+  corium::IsrLock::enter(s_pulse_mux);
+  s_pulse_head = 0;
+  s_pulse_count = 0;
+  s_pulse_ring = r;
+  corium::IsrLock::leave(s_pulse_mux);
+}
+
+// Same as a boot in bucket mode. Pointer cleared under the lock so the ISR can't write to it once freed
+void drop_pulse_ring() {
+  if (!s_pulse_ring) return;
+  corium::IsrLock::enter(s_pulse_mux);
+  volatile uint32_t* r = s_pulse_ring;
+  s_pulse_ring = nullptr;
+  s_pulse_head = 0;
+  s_pulse_count = 0;
+  corium::IsrLock::leave(s_pulse_mux);
+  free((void*)r);
+}
+
+// full count including the 32 bit rollovers
+inline uint64_t all_clicks(uint32_t rollover, uint32_t clicks) {
+  return ((uint64_t)rollover << 32) + clicks;
+}
+
+inline __attribute__((always_inline)) void add_wrapped(uint32_t& lo, uint32_t& hi, uint32_t n) {
+  uint32_t prev = lo;
+  lo += n;
+  if (prev > lo) hi++;
 }
 }  // namespace
 
 void Counter::set_cpm_mode(uint8_t m) {
-  _cpm_mode = (m > 4) ? 3 : m;
-  if (_cpm_mode != 3) ensure_pulse_ring();
+  _cpm_mode = m;
+  _cps_in.reset();
+  if (_cpm_mode != CPM_BUCKET) ensure_pulse_ring();
+  else drop_pulse_ring();
 }
 
 #if GEIGER_IS_TEST(GEIGER_TYPE)
 void Counter::set_target_cpm(float val) {
-  static_cast<GeigerInputTest*>(geigerinput)->setTargetCPM(val, true);
+  static_cast<GeigerInputTest*>(_input)->setTargetCPM(val, true);
 }
 #endif
 #if GEIGER_TYPE == GEIGER_TYPE_UDPRX
-GeigerUdpRx* Counter::udp_rx() { return static_cast<GeigerUdpRx*>(geigerinput); }
+GeigerUdpRx* Counter::udp_rx() { return static_cast<GeigerUdpRx*>(_input); }
 #endif
 
-void Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
-  // synthetic, no min_pulse_us
-  if (!s_pulse_ring || count == 0) return;
+uint16_t Counter::on_pulse_batch(uint16_t count, uint32_t end_us, uint32_t span_us) {
+  // synthetic timestamps, so min_pulse_us is left alone
+  if (!s_pulse_ring || count == 0) return 0;
   if (count > PULSE_RING_SIZE - 1) count = PULSE_RING_SIZE - 1;
   uint32_t step = (count > 1) ? (span_us / count) : 0;
   uint32_t t = end_us - (uint32_t)(count - 1) * step;
-#ifdef ESP32
-  portENTER_CRITICAL_ISR(&s_pulse_mux);
-#else
-  noInterrupts();
-#endif
+  corium::IsrLock::enter(s_pulse_mux);
   for (uint16_t i = 0; i < count; i++) {
     s_pulse_ring[s_pulse_head] = t;
     s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
     if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
     t += step;
   }
-#ifdef ESP32
-  portEXIT_CRITICAL_ISR(&s_pulse_mux);
-#else
-  interrupts();
-#endif
+  corium::IsrLock::leave(s_pulse_mux);
+  return count;
+}
+
+void Counter::drop_pulses(uint32_t n) {
+  if (!s_pulse_ring) return;
+  corium::IsrLock::enter(s_pulse_mux);
+  if (n > s_pulse_count) n = s_pulse_count;
+  s_pulse_count -= n;
+  s_pulse_head = (s_pulse_head - n) & PULSE_RING_MASK;
+  corium::IsrLock::leave(s_pulse_mux);
 }
 
 uint32_t Counter::_pulse_hist[Counter::HIST_BUCKETS] = {0};
 
-void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
+// histogram and min interval are updated under the ring's lock too
+void CORIUM_ISR_ATTR Counter::on_pulse(uint32_t now_us) {
+  corium::IsrLock::enterIsr(s_pulse_mux);
   if (s_prev_pulse_us) {
     uint32_t interval = now_us - s_prev_pulse_us;
     if (interval && interval < s_min_pulse_us) s_min_pulse_us = interval;
@@ -124,318 +159,342 @@ void IRAM_ATTR Counter::on_pulse(uint32_t now_us) {
   }
   s_prev_pulse_us = now_us;
   s_hist_from_isr = true;
+  if (s_pulse_ring) {
+    s_pulse_ring[s_pulse_head] = now_us;
+    s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
+    if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
+  }
+  corium::IsrLock::leaveIsr(s_pulse_mux);
+}
 
+void Counter::pulse_histogram(uint32_t* out) const {
+  corium::IsrLock::enter(s_pulse_mux);
+  memcpy(out, _pulse_hist, sizeof(_pulse_hist));
+  corium::IsrLock::leave(s_pulse_mux);
+}
+
+// Caller holds the lock. Runs every second so an age never gets near the micros() wrap
+static uint16_t drop_old(uint16_t head, uint32_t now_us) {
+  uint16_t count = s_pulse_count;
+  while (count && now_us - s_pulse_ring[(head - count) & PULSE_RING_MASK] > PULSE_AGE_MAX_US) count--;
+  s_pulse_count = count;
+  return count;
+}
+
+// The ISR keeps filling the ring even when the mode isn't reading it, so trim it here
+static void prune_ring() {
   if (!s_pulse_ring) return;
-#ifdef ESP32
-  portENTER_CRITICAL_ISR(&s_pulse_mux);
-#endif
-  s_pulse_ring[s_pulse_head] = now_us;
-  s_pulse_head = (s_pulse_head + 1) & PULSE_RING_MASK;
-  if (s_pulse_count < PULSE_RING_SIZE) s_pulse_count++;
-#ifdef ESP32
-  portEXIT_CRITICAL_ISR(&s_pulse_mux);
-#endif
+  corium::IsrLock::enter(s_pulse_mux);
+  drop_old(s_pulse_head, micros());
+  corium::IsrLock::leave(s_pulse_mux);
 }
 
 bool Counter::snapshot_ring(RingSnapshot& s) const {
   if (!s_pulse_ring) { s.count = 0; return false; }
-#ifdef ESP32
-  portENTER_CRITICAL(&s_pulse_mux);
-#else
-  noInterrupts();
-#endif
+  corium::IsrLock::enter(s_pulse_mux);
+  uint32_t now = micros();
   uint16_t head  = s_pulse_head;
-  uint16_t count = s_pulse_count;
+  uint16_t count = drop_old(head, now);
   if (count >= 2) {
     s.newest_us = s_pulse_ring[(head - 1)     & PULSE_RING_MASK];
     s.oldest_us = s_pulse_ring[(head - count) & PULSE_RING_MASK];
+    // quiet for longer than the ring covers, so no live rate
+    if (now - s.newest_us > s.newest_us - s.oldest_us) count = 0;
   }
-#ifdef ESP32
-  portEXIT_CRITICAL(&s_pulse_mux);
-#else
-  interrupts();
-#endif
+  corium::IsrLock::leave(s_pulse_mux);
+  s.now_us = now;
   s.count = count;
   return count >= 2;
 }
 
-// RTC stash, survives a crash not a power cut
+// Lifetime totals kept in RTC memory. Survives a crash or reset but not a power cut,
+// on boot the bigger of RTC and the saved file wins.
 namespace {
-constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11D;  // bump on layout change
-struct LifeRtc { uint32_t magic; uint32_t delta_clicks; uint32_t delta_seconds; };
+constexpr uint32_t LIFE_RTC_MAGIC = 0xCAFEC11F;  // bump on layout change
+// Magic is XORed with the other fields so a flipped bit anywhere fails the check
+struct LifeRtc { uint32_t magic; uint32_t clicks; uint32_t rollover; uint32_t secs; };
 
-#ifdef ESP8266
-typedef RtcSlot<LifeRtc, RtcMap::APP1_AT, RtcMap::APP1_WORDS> LifeSlot;
+CORIUM_RTC_SLOT(LifeSlot, LifeRtc, corium::RtcMap::APP1_AT, corium::RtcMap::APP1_WORDS);
 bool life_read(LifeRtc& r) { return LifeSlot::read(r); }
 void life_write(const LifeRtc& r) { LifeSlot::write(r); }
-void life_clear() { LifeSlot::clear(); }
-#else
-RTC_NOINIT_ATTR LifeRtc s_life;   // garbage after power-on
-bool life_read(LifeRtc& r) { r = s_life; return true; }
-void life_write(const LifeRtc& r) { s_life = r; }
-void life_clear() { s_life.magic = 0; }
-#endif
+// All zeros can never pass the check, zeroing just the magic could
+void life_clear() { life_write(LifeRtc{}); }
 
-void rtc_life_stash(uint32_t delta_clicks, uint32_t delta_seconds) {
-  life_write(LifeRtc{LIFE_RTC_MAGIC, delta_clicks, delta_seconds});
+void rtc_life_stash(uint32_t clicks, uint32_t rollover, uint32_t secs) {
+  life_write(LifeRtc{LIFE_RTC_MAGIC ^ clicks ^ rollover ^ secs, clicks, rollover, secs});
 }
-bool rtc_life_recover_and_clear(uint32_t* out_clicks, uint32_t* out_seconds) {
-  LifeRtc r{};
-  *out_clicks = 0; *out_seconds = 0;
-  if (!life_read(r)) return false;
-  if (r.magic != LIFE_RTC_MAGIC) return false;
-  life_clear();
-  *out_clicks  = r.delta_clicks;
-  *out_seconds = r.delta_seconds;
-  return true;
+bool rtc_life_recover(LifeRtc& r) {
+  return life_read(r) && r.magic == (LIFE_RTC_MAGIC ^ r.clicks ^ r.rollover ^ r.secs);
 }
 }
 
 Counter::Counter() {
-#if GEIGER_TYPE == GEIGER_TYPE_PULSE
-  geigerinput = new GeigerPulse();
-#elif GEIGER_TYPE == GEIGER_TYPE_SERIAL
-  geigerinput = new GeigerSerial();
-#elif GEIGER_TYPE == GEIGER_TYPE_UDPRX
-  geigerinput = new GeigerUdpRx();
-#elif GEIGER_TYPE == GEIGER_TYPE_TEST
-  geigerinput = new GeigerTest();
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSE
-  geigerinput = new GeigerTestPulse();
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTSERIAL
-  geigerinput = new GeigerTestSerial();
-#elif GEIGER_TYPE == GEIGER_TYPE_TESTPULSEINT
-  geigerinput = new GeigerTestPulseInt();
-#endif
+  _input = new InputType();
 }
 
 namespace {
-#if !GEIGER_IS_TEST(GEIGER_TYPE)
-bool     s_missing_logged = false;
-#endif
-time_t   s_next_boundary  = 0;
+bool     s_missing = false;   // test input never sets it
+uint32_t s_next_boundary  = 0;   // epoch, reached() copes with the 2106 wrap
 TickClock s_clock;
 bool     s_boundary_armed = false;
 uint32_t s_last_day       = 0;
-uint32_t s_rtc_ctr        = 0;
-uint32_t s_save_ctr       = 0;
+uint8_t  s_life_left      = RTC_STASH_S;
+uint32_t s_save_s         = 0;
 }  // namespace
 
+// counting starts with the reactor, 0 before that
+static inline uint32_t run_from(uint32_t up) {
+  long s = corium::Uptime::start;
+  return s > 0 ? up - (uint32_t)(s - 1) : 0;
+}
+
 #if !GEIGER_IS_TEST(GEIGER_TYPE)
-inline void Counter::note_counts_missing(uint32_t uptime_s) {
-  bool cm = CounterMaths::counts_missing(uptime_s, _last_count_up_s, (uint32_t)total_clicks);
+CORIUM_TICK_COLD void Counter::note_counts_missing(uint32_t run) {
+  bool missing = CounterMaths::counts_missing(run, _last_count_up_s,
+                                              all_clicks(total_clicks_rollover, total_clicks));
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  cm = cm && !udp_rx()->heard();
+  missing = missing && !udp_rx()->heard();
 #endif
-  if (cm && !s_missing_logged) {
+  if (missing && !s_missing) {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-    Log::console(PSTR("Counter: no counts detected - check tube and wiring (GPIO %d)"), input_pin());
+    corium::Log::console(PSTR("Counter: No counts detected - check tube and wiring (GPIO %d)"), input_pin());
 #else
-    Log::console(PSTR("Counter: no counts detected - check tube/input wiring"));
+    corium::Log::console(PSTR("Counter: No counts detected - check tube/input wiring"));
 #endif
   }
-  s_missing_logged = cm;
+  s_missing = missing;
 }
 #endif
 
-inline void Counter::hour_rollover(time_t now) {
-  // not static, guard runs every tick
-  const time_t kBoundarySecs = (time_t)_boundary_secs;
+static uint32_t next_boundary(time_t t, uint32_t secs) {
+  return (uint32_t)(t - t % secs + secs);
+}
+
+// Hour and day maths use the full time_t, 2^32 s isn't a whole number of days
+CORIUM_TICK_COLD void Counter::hour_rollover(time_t t) {
+  // Plain local, a static would add an init guard check every tick
+  const uint32_t step = _boundary_s;
+  uint32_t now = (uint32_t)t;
   bool fire = false;
   if (s_next_boundary == 0) {
-    // first sync
-    s_next_boundary = now - (now % kBoundarySecs) + kBoundarySecs;
+    // First sync, line up and fire once
+    s_next_boundary = next_boundary(t, step);
     fire = true;
-  } else if (now >= s_next_boundary) {
+  } else if (corium::reached(now, s_next_boundary)) {
     fire = true;
-    // ntp stepped forward
-    while (now >= s_next_boundary) s_next_boundary += kBoundarySecs;
+    // catch up if NTP stepped forward
+    while (corium::reached(now, s_next_boundary)) s_next_boundary += step;
   }
   if (!fire) return;
-  uint32_t curDay = (uint32_t)(now / 86400);
+  uint32_t day = (uint32_t)(t / 86400);
   if (s_boundary_armed) {
     day_hourly_history.push(clicks_hour);
   }
   clicks_hour = 0;
-  if (curDay != s_last_day) {
+  if (day != s_last_day) {
     if (s_boundary_armed) clicks_yesterday = clicks_today;
     clicks_today = 0;
   }
-  s_last_day = curDay;
+  s_last_day = day;
   s_boundary_armed = true;
 }
 
-inline void Counter::lifetime_tick(int counts, time_t now) {
-  unsigned long prev_lifetime = total_clicks_lifetime;
-  total_clicks_lifetime += counts;
-  if (prev_lifetime > total_clicks_lifetime) {
-    total_clicks_lifetime_rollover++;
-  }
-  if (counts > 0) {
-    _rtc_unsaved_clicks += (uint32_t)counts;
-  }
-  if (_last_save_time_t == 0 && Clock::synced) {
-    _last_save_time_t = (uint32_t)now;
-  }
-  if (++s_rtc_ctr >= RTC_STASH_S) {
-    s_rtc_ctr = 0;
-    _rtc_pending_now = (uint32_t)now;
-    _pending_work |= PENDING_RTC;
-  }
-  if (_first_boot_ts == 0 && Clock::synced) {
-    _first_boot_ts = (uint32_t)now;
+// only on the ticks that read the clock
+CORIUM_TICK_COLD uint32_t Counter::clock_read() {
+  time_t t = corium::Clock::now();
+  uint32_t now = (uint32_t)t;
+  if (!s_next_boundary || corium::reached(now, s_next_boundary)) hour_rollover(t);
+  // Only NTP can pull the first boot stamp back, browser or RTC time can't
+  bool ahead = corium::Clock::source == corium::Clock::NTP && !corium::reached(now, _first_boot_ts);
+  if (_lifetime_enabled && (!_first_boot_ts || ahead)) {
+    _first_boot_ts = now;
     _pending_work |= PENDING_SAVE;
   }
-  if (++s_save_ctr >= LIFETIME_SAVE_S) {
-    s_save_ctr = 0;
+  s_clock.read(now, s_next_boundary);
+  return now;
+}
+
+inline void Counter::lifetime_tick(int counts) {
+  add_wrapped(total_clicks_lifetime, total_clicks_lifetime_rollover, counts);
+  if (!--s_life_left) life_work();
+}
+
+// Lifetime seconds are counted ticks, not taken from the clock
+CORIUM_TICK_COLD void Counter::life_work() {
+  s_life_left = RTC_STASH_S;
+  _life_saved_s += RTC_STASH_S;
+  _pending_work |= PENDING_RTC;
+  s_save_s += RTC_STASH_S;
+  if (s_save_s >= LIFETIME_SAVE_S) {
+    s_save_s = 0;
     _pending_work |= PENDING_SAVE;
   }
+}
+
+// When the counts changed, or the mode reads the live ring
+CORIUM_TICK_COLD void Counter::cpm_work(bool fresh) {
+  if (fresh) _cached_cps = apply_dead_time(window_mean(_cps_in.sum, _cps_in.n, _cpm_window, _cpm_window_inv));
+  _cached_cpm_active = (_cpm_mode == CPM_BUCKET ? _cached_cps : get_cps()) * 60.0f;
+  _cached_ccpm = (int)(_cached_cpm_active + 0.5f);   // capped by apply_dead_time
+}
+
+CORIUM_TICK_COLD void Counter::ema_work(bool add15) {
+  _ticks5.add(_cached_cps);
+  if (add15) _ticks15.add(_ticks5.get());
+}
+
+// Returns true on each 5 s step
+inline bool Counter::ema_tick() {
+  static uint8_t s_tick = 0;
+  bool add5 = s_tick == 0 || s_tick == EMA5_S || s_tick == 2 * EMA5_S;
+  if (add5) ema_work(s_tick == 0);
+  if (++s_tick >= EMA15_S) s_tick = 0;
+  return add5;
 }
 
 inline void Counter::update_alarms(int cpm) {
-  bool warm = geigerTicks.warm();
+  bool warm = _ticks.warm();
   bool warn = alarm_over(cpm, _cpm_warning, warm);
   bool alrt = alarm_over(cpm, _cpm_alert, warm);
   if (!warn && !alrt) _alarm_snoozed = false;
-  _bool_cpm_warning = warn && !_alarm_snoozed;
-  _bool_cpm_alert   = alrt && !_alarm_snoozed;
-}
-
-// esp32: once a second from flash misses the cache
-#ifdef ESP32
-#define TICK_ATTR IRAM_ATTR
-#else
-#define TICK_ATTR
-#endif
-
-static inline uint16_t cps_x600(float cps) {
-  uint32_t t = (uint32_t)(cps * 600.0f + 0.5f);
-  return t > 0xFFFFu ? 0xFFFFu : (uint16_t)t;
-}
-
-void TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
-  if (!_running) return;
-  geigerinput->secondTicker();
-
-  int eventCounter = geigerinput->collect();
-  if (eventCounter > 0) _last_count_up_s = uptime_s;
-#if !GEIGER_IS_TEST(GEIGER_TYPE)
-  note_counts_missing(uptime_s);
-#endif
-  static uint8_t tick_cnt = 0;
-  geigerTicks.add(eventCounter);
-  unsigned long previous_total_clicks = total_clicks;
-  total_clicks += eventCounter;
-  if (previous_total_clicks > total_clicks) {   // wrapped
-    total_clicks_rollover++;
+  _warn_on  = warn;
+  _alert_on = alrt;
+  uint8_t bits = _warn_on | (_alert_on << 1) | (warm << 2);
+  if (bits != _alarm_bits) {
+    _alarm_bits = bits;
+    _pending_work |= PENDING_ALARM;
   }
+}
 
-  _cached_cps = apply_dead_time(geigerTicks.get());
-  _cached_cpm_active = get_cps() * 60.0f;
-  // roundf without soft-float, cpm >= 0
-  int ccpm = (int)(_cached_cpm_active + 0.5f);
+void CORIUM_TICK_ATTR Counter::secondticker(uint32_t uptime_s) {
+  if (!_running) return;
+  InputType* in = static_cast<InputType*>(_input);
+  in->secondTicker();
+
+  int counts = clamp_counts(in->collect());
+  uint32_t run = run_from(uptime_s);
+  if (counts > 0) _last_count_up_s = run;
+  _ticks.add(counts);
+  add_wrapped(total_clicks, total_clicks_rollover, counts);
+  _sec_counts += counts;   // added to hour and day after the clock check
+  if (_lifetime_enabled) lifetime_tick(counts);
+
+  // rest of the work is done from the loop
+  _second_up = run;
+  // OTA holds the loop, so do it here and keep the history going
+  if (_ota) { second_work(); return; }
+  if (_secs_due < 255) _secs_due++;
+  _pending_work |= PENDING_SECOND;
+}
+
+void Counter::second_work() {
+  uint32_t run = _second_up;
+#if !GEIGER_IS_TEST(GEIGER_TYPE)
+  if (run - _last_count_up_s >= MISSING_MIN_S || s_missing) note_counts_missing(run);
+#endif
+  // skip the maths if the counts haven't changed
+  bool fresh = !_cps_in.same(_ticks.sum(), _ticks.count(), _dead_time_us);
+  if (fresh || _cpm_mode != CPM_BUCKET) cpm_work(fresh);
+  int ccpm = _cached_ccpm;
 
   cpm_history.push(ccpm);
 
-  bool add5 = tick_cnt == 0 || tick_cnt == 5 || tick_cnt == 10;
-  if (add5) {
-    geigerTicks5.add(_cached_cps);
-    if (tick_cnt == 0) {
-      geigerTicks15.add(geigerTicks5.get());
-    }
-  }
-  if (++tick_cnt >= 15) tick_cnt = 0;
+  bool add5 = ema_tick();
   if (cpm5_history) push_cpm5(add5);
 
-  time_t currentTime = Clock::synced ? s_clock.step(s_next_boundary, time) : 0;
-  if (Clock::synced) hour_rollover(currentTime);
+  if (corium::Clock::synced && !s_clock.count()) (void)clock_read();
+  clicks_today += _sec_counts;
+  clicks_hour += _sec_counts;
+  _sec_counts = 0;
 
-  clicks_today += eventCounter;
-  clicks_hour += eventCounter;
-
-  if (_lifetime_enabled) lifetime_tick(eventCounter, currentTime);
   update_alarms(ccpm);
+  note_health();
+  _pending_work |= PENDING_COUNTS;
 }
 
+// Health bits 0-3, HV has its own
+CORIUM_TICK_COLD void Counter::note_health() {
+  health().put(H_COUNTER, (uint16_t)(s_missing << H_SILENT |
+                                     _input->stormy() << H_STORM |
+                                     _input->chattering() << H_CHATTER |
+                                     !_input->isHealthy() << H_NO_INPUT));
+}
+
+// Snooze quiets the sounders and relay, the warning/alert state is kept
 void Counter::reset_alarm() {
-  if (!_bool_cpm_warning && !_bool_cpm_alert) return;
-  _alarm_snoozed    = true;
-  _bool_cpm_warning = false;
-  _bool_cpm_alert   = false;
-  Log::console(PSTR("Alarm: snoozed until level drops below warning"));
+  if (_alarm_snoozed || (!_warn_on && !_alert_on)) return;
+  _alarm_snoozed = true;
+  _pending_work |= PENDING_ALARM;
+  corium::Log::console(PSTR("Alarm: Snoozed until level drops below warning"));
 }
 
-void Counter::save_lifetime() {
-  uint32_t now = Clock::epoch();
-  if (_last_save_time_t > 0 && Clock::synced && now >= _last_save_time_t) {
-    _lifetime_seconds_saved += now - _last_save_time_t;
-  }
-  if (Clock::synced) _last_save_time_t = now;
-
-  EGPrefs::putUInt("life", EG_K_CLK, total_clicks_lifetime);
-  EGPrefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover);
-  EGPrefs::putUInt("life", EG_K_FBT, _first_boot_ts);
-  EGPrefs::putUInt("life", EG_K_SECS, _lifetime_seconds_saved);
-  EGPrefs::commit();
-  _rtc_unsaved_clicks = 0;
-  rtc_life_stash(0, 0);
+// If this fails the RTC stash still has the totals
+bool Counter::save_lifetime() {
+  bool put = corium::Prefs::putUInt("life", EG_K_CLK, total_clicks_lifetime) &&
+             corium::Prefs::putUInt("life", EG_K_CLKR, total_clicks_lifetime_rollover) &&
+             corium::Prefs::putUInt("life", EG_K_FBT, _first_boot_ts) &&
+             corium::Prefs::putUInt("life", EG_K_SECS, _life_saved_s);
+  (void)corium::Prefs::commit();   // false if any group failed, landed() checks just life
+  if (put && corium::Prefs::landed("life")) return true;
+  corium::Log::console(PSTR("Lifetime: Not saved"));
+  return false;
 }
 
 unsigned long Counter::get_lifetime_seconds() const {
-  unsigned long live = _lifetime_seconds_saved;
-  if (_last_save_time_t > 0 && Clock::synced) {
-    uint32_t now = Clock::epoch();
-    if (now >= _last_save_time_t) live += now - _last_save_time_t;
-  }
-  return live;
+  return _life_saved_s;
 }
 
 void Counter::clock_stepped(int32_t delta_s) {
-  if (_last_save_time_t) _last_save_time_t += delta_s;
-  // stamped from the bad time this boot
-  if (_first_boot_ts && _first_boot_ts >= (uint32_t)(Clock::boot_epoch - delta_s)) {
+  // First boot stamp was taken from the wrong time this boot, move it too
+  if (_first_boot_ts && corium::reached(_first_boot_ts, (uint32_t)(corium::Clock::bootEpoch - delta_s))) {
     _first_boot_ts += delta_s;
     _pending_work |= PENDING_SAVE;
   }
-  s_next_boundary = 0;
+  // Only re-align if the step changed the hour, else it pushes an early hour bar
+  if (s_next_boundary != next_boundary(corium::Clock::now(), _boundary_s)) s_next_boundary = 0;
+  s_clock.read_next();
 }
 
-void Counter::reset_lifetime() {
+bool Counter::reset_lifetime() {
   total_clicks_lifetime = 0;
   total_clicks_lifetime_rollover = 0;
-  _first_boot_ts = 0;
-  _lifetime_seconds_saved = 0;
-  _last_save_time_t = 0;
-  save_lifetime();
-  Log::console(PSTR("Lifetime: reset"));
+  _life_saved_s = 0;   // first boot stamp is kept
+  life_clear();   // Else a crash brings the old totals back
+  bool ok = save_lifetime();
+  if (ok) corium::Log::console(PSTR("Lifetime: Reset"));
+  return ok;
 }
 
 float Counter::get_cps() {
-  if (_cpm_mode == 3) return _cached_cps;
-  auto ringOrBucket = [&](float v) -> float {
+  if (_cpm_mode == CPM_BUCKET) return _cached_cps;
+  auto or_bucket = [&](float v) -> float {
     return v > 0.0f ? apply_dead_time(v) : _cached_cps;
   };
   switch (_cpm_mode) {
-    case 1: return ringOrBucket(get_cps_live());
-    case 2: return ringOrBucket(cps_windowed(60UL * 1000000UL, 64));
-    case 4: return ringOrBucket(cps_windowed(5UL  * 1000000UL, 19));
-    case 0: {
-      float live = get_cps_live();
-      if (live <= 0.0f) return _cached_cps;
-      uint32_t up = DeviceInfo::uptime();
+    case CPM_LIVE: return or_bucket(get_cps_live());
+    case CPM_60S:  return or_bucket(cps_windowed(FIXED_US, FIXED_N));
+    case CPM_FAST: return or_bucket(cps_windowed(FAST_US, FAST_N));
+    case CPM_FAST_START: {
+      uint32_t up = run_s();
       uint32_t w  = _cpm_window;
+      // Live rate up to w, then blend into the bucket by 2w. After that the ring just gets pruned
+      if (up >= 2u * w) {
+        prune_ring();
+        return _cached_cps;
+      }
+      float live = get_cps_live(FAST_N);   // a few close pulses overshoot, use the bucket until there's FAST_N
+      if (live <= 0.0f) return _cached_cps;
       if (up <  w)      return apply_dead_time(live);
-      if (up >= 2u * w) return _cached_cps;
-      float liveC = apply_dead_time(live);
+      float adj = apply_dead_time(live);
       float a = (float)(up - w) * _cpm_window_inv;
-      return liveC * (1.0f - a) + _cached_cps * a;
+      return adj * (1.0f - a) + _cached_cps * a;
     }
     default: return _cached_cps;
   }
 }
 
 int Counter::get_cpm() {
-  return (int)roundf(_cached_cpm_active);
+  return to_int(_cached_cpm_active);
 }
 
 float Counter::get_cpmf() {
@@ -443,44 +502,44 @@ float Counter::get_cpmf() {
 }
 
 int Counter::get_cpm5() {
-  return (int)roundf(get_cpm5f());
+  return to_int(get_cpm5f());
 }
 
 float Counter::get_cpm5f() {
-  return geigerTicks5.get() * 60.0f;
+  return _ticks5.get() * 60.0f;
 }
 
-// out of the tick
+// noinline keeps this out of the tick
 void __attribute__((noinline)) Counter::push_cpm5(bool fresh) {
-  if (fresh) _cpm5_x10 = cps_x600(geigerTicks5.get());
+  if (fresh) _cpm5_x10 = cps_x600(_ticks5.get());
   cpm5_history->push(_cpm5_x10);
 }
 
 void Counter::want_cpm5_history() {
   if (cpm5_history) return;
-  _cpm5_x10 = cps_x600(geigerTicks5.get());
+  _cpm5_x10 = cps_x600(_ticks5.get());
   cpm5_history = new (std::nothrow) CircularBuffer<uint16_t,45>();
 }
 
 int Counter::get_cpm15() {
-  return (int)roundf(get_cpm15f());
+  return to_int(get_cpm15f());
 }
 
 float Counter::get_cpm15f() {
-  return geigerTicks15.get() * 60.0f;
+  return _ticks15.get() * 60.0f;
 }
 
 bool Counter::get_tube_alive() {
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
   if (udp_rx()->heard()) return true;
 #endif
-  return tube_alive((uint32_t)DeviceInfo::uptime(), _last_count_up_s,
-                    (uint32_t)total_clicks);
+  return tube_alive(run_s(), _last_count_up_s,
+                    all_clicks(total_clicks_rollover, total_clicks));
 }
 
 int Counter::input_pin() {
 #if GEIGER_IS_PULSE(GEIGER_TYPE)
-  return geigerinput->get_rx_pin();
+  return _input->get_rx_pin();
 #else
   return -1;
 #endif
@@ -490,26 +549,26 @@ bool Counter::counts_missing() {
 #if GEIGER_IS_TEST(GEIGER_TYPE)
   return false;
 #else
-  bool cm = CounterMaths::counts_missing((uint32_t)DeviceInfo::uptime(),
-                                         _last_count_up_s,
-                                         (uint32_t)total_clicks);
+  bool missing = CounterMaths::counts_missing(run_s(),
+                                              _last_count_up_s,
+                                              all_clicks(total_clicks_rollover, total_clicks));
 #if GEIGER_IS_UDPRX(GEIGER_TYPE)
-  cm = cm && !udp_rx()->heard();
+  missing = missing && !udp_rx()->heard();
 #endif
-  return cm;
+  return missing;
 #endif
 }
 
 bool Counter::get_saturated() {
   float cps = get_cps_live();
-  if (cps <= 0.0f) cps = geigerTicks.get();
+  if (cps <= 0.0f) cps = _ticks.mean();
   return saturated_at(cps);
 }
 
-float Counter::get_cps_live() {
+float Counter::get_cps_live(uint16_t min_n) {
   RingSnapshot s;
-  if (!snapshot_ring(s)) return 0.0f;
-  uint32_t span_us = s.newest_us - s.oldest_us;
+  if (!snapshot_ring(s) || s.count < min_n) return 0.0f;
+  uint32_t span_us = s.now_us - s.oldest_us;   // span to now, so the rate falls once pulses stop
   if (span_us == 0) return 0.0f;
   return (float)(s.count - 1) * 1.0e6f / (float)span_us;
 }
@@ -517,18 +576,16 @@ float Counter::get_cps_live() {
 float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
   // 0 = uncapped
   if (!s_pulse_ring) return 0.0f;
-#ifdef ESP32
-  portENTER_CRITICAL(&s_pulse_mux);
-#else
-  noInterrupts();
-#endif
+  corium::IsrLock::enter(s_pulse_mux);
+  uint32_t now = micros();
   uint16_t head  = s_pulse_head;
-  uint16_t count = s_pulse_count;
-  uint32_t newest = 0, oldest = 0;
+  uint16_t count = drop_old(head, now);
+  uint32_t newest = s_pulse_ring[(head - 1) & PULSE_RING_MASK];
+  uint32_t oldest = newest;
   uint16_t take = 0;
+  // Quiet for longer than the window, nothing in it
+  if (max_age_us && now - newest > max_age_us) count = 0;
   if (count >= 2) {
-    newest = s_pulse_ring[(head - 1) & PULSE_RING_MASK];
-    oldest = newest;
     take = 1;
     uint16_t cap = (max_pulses && max_pulses < count) ? max_pulses : count;
     for (uint16_t i = 2; i <= cap; i++) {
@@ -538,11 +595,7 @@ float Counter::cps_windowed(uint32_t max_age_us, uint16_t max_pulses) const {
       take = i;
     }
   }
-#ifdef ESP32
-  portEXIT_CRITICAL(&s_pulse_mux);
-#else
-  interrupts();
-#endif
+  corium::IsrLock::leave(s_pulse_mux);
   if (take < 2) return 0.0f;
   uint32_t span = newest - oldest;
   if (span == 0) return 0.0f;
@@ -560,29 +613,27 @@ uint32_t Counter::get_cps_win_us() {
 }
 
 uint32_t Counter::get_min_pulse_us() {
+  corium::IsrLock::enter(s_pulse_mux);
   uint32_t v = s_min_pulse_us;
+  corium::IsrLock::leave(s_pulse_mux);
   return (v == UINT32_MAX) ? 0 : v;
 }
 
 void Counter::set_blip_brightness(uint8_t level) {
-  LedSignal::setBrightness(level);
+  corium::LedSignal::setBrightness(level);
+#ifdef LED_FLASH_ENGINE
+  BlipLed::setBrightness(level);
+#endif
 }
 
 void Counter::set_quiet_hours(const char* from, const char* to) {
   _quiet.set(from, to);
 }
 
-void Counter::set_warning(int val) {
-  _cpm_warning = clamp(val, 0, 9999);
-}
-
-void Counter::set_alert(int val) {
-  _cpm_alert = clamp(val, 0, 9999);
-}
-
+// warmup plus one full window
 bool Counter::is_warm() const {
   if (_warm_cached) return true;
-  if (DeviceInfo::uptime() >= (uint32_t)(ESPG_WARMUP_S + _cpm_window)) {
+  if (run_s() >= (uint32_t)(ESPG_WARMUP_S + _cpm_window)) {
     _warm_cached = true;
     return true;
   }
@@ -597,46 +648,86 @@ float Counter::get_usv5() {
   return get_cpm5f() * _ratio_inv;
 }
 
-static void counter_lifecycle(Lifecycle::Event e) {
-  if (e == Lifecycle::OTA_FAILED) gcounter.restart_after_ota();
+static void counter_lifecycle(corium::Lifecycle::Event e) {
+  gcounter.ota_hold(e == corium::Lifecycle::OTA_START);
+  if (e == corium::Lifecycle::OTA_FAILED) gcounter.restart_after_ota();
   else gcounter.stop_for_ota();
 }
 
 static void counter_clock_stepped(int32_t delta_s) { gcounter.clock_stepped(delta_s); }
 
-void Counter::begin() {
-  geigerTicks.begin(_cpm_window);
-#ifndef GEIGER_SMOOTH_AVG
-  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:EMA 15:EMA"), _cpm_window);
-  geigerTicks5.begin(GEIGER_EMA_FACTOR);
-  geigerTicks15.begin(GEIGER_EMA_FACTOR);
+// Build fails past MAX, this just logs one that gets through anyway
+bool ClickFns::add(ClickFn f) {
+  if (!f) return false;
+  for (uint8_t i = 0; i < n; i++) {
+    if (fn[i] == f) return true;   // already added by an earlier begin()
+  }
+  if (n >= MAX) {
+    corium::Log::console(PSTR("Counter: Click hook dropped, %u max"), (unsigned)MAX);
+    return false;
+  }
+  fn[n++] = f;
+  return true;
+}
+
+void ClickFns::fire(uint32_t us) const {
+  for (uint8_t i = 0; i < n; i++) fn[i](us);
+}
+
+static void grng_click(uint32_t us) { GRNG::mix(us ^ corium::DeviceInfo::cycles()); }
+static void led_click(uint32_t) {
+  if (!gcounter.blip_led()) return;
+#ifdef LED_FLASH_ENGINE
+  BlipLed::flash();
 #else
-  Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), _cpm_window, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
-  geigerTicks5.begin(GEIGER_CPM5_COUNT);
-  geigerTicks15.begin(GEIGER_CPM15_COUNT);
+  corium::LedSignal::flash();
+#endif
+}
+
+void Counter::begin() {
+  _clicks.add(grng_click);
+#ifndef DISABLE_BLIP
+  _clicks.add(led_click);
+  _rx_clicks.add(led_click);
+#endif
+  _ticks.begin(_cpm_window);
+#ifndef GEIGER_SMOOTH_AVG
+  corium::Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:EMA 15:EMA"), _cpm_window);
+  _ticks5.begin(GEIGER_EMA_FACTOR);
+  _ticks15.begin(GEIGER_EMA_FACTOR);
+#else
+  corium::Log::console(PSTR("Counter: Bucket sizes - 1:%d 5:%d 15:%d"), _cpm_window, GEIGER_CPM5_COUNT, GEIGER_CPM15_COUNT);
+  _ticks5.begin(GEIGER_CPM5_COUNT);
+  _ticks15.begin(GEIGER_CPM15_COUNT);
 #endif
 
-  geigerinput->begin();
-  _boundary_secs = (uint16_t)geigerinput->boundary_seconds();
+  _input->begin();
+  _boundary_s = (uint16_t)_input->boundary_seconds();
   apply_pcnt_filter();
-  Lifecycle::on(counter_lifecycle);
-  Clock::on_step(counter_clock_stepped);
+  corium::Lifecycle::on(counter_lifecycle);
+  corium::Clock::onStep(counter_clock_stepped);
 
-  uint32_t rtc_delta_clicks = 0, rtc_delta_seconds = 0;
-  bool rtc_ok = rtc_life_recover_and_clear(&rtc_delta_clicks, &rtc_delta_seconds);
-  if (rtc_ok && _lifetime_enabled) {
-    if (rtc_delta_clicks > 0) {
-      unsigned long prev = total_clicks_lifetime;
-      total_clicks_lifetime += rtc_delta_clicks;
-      if (prev > total_clicks_lifetime) {
-        total_clicks_lifetime_rollover++;
-      }
+  LifeRtc r{};
+  // An erase wipes the life file but not RTC, so no file means the RTC totals go too
+  // TODO: keep a backup of life.bin
+  bool rtc_ok = corium::Prefs::stored("life") && rtc_life_recover(r);
+  if (!rtc_ok || !_lifetime_enabled) {
+    life_clear();
+  } else {
+    // RTC is newer than the file after a crash, older after a save
+    uint64_t was = all_clicks(total_clicks_lifetime_rollover, total_clicks_lifetime);
+    uint64_t got = all_clicks(r.rollover, r.clicks);
+    uint64_t clicks = got > was ? got - was : 0;
+    uint32_t secs = r.secs > _life_saved_s ? r.secs - _life_saved_s : 0;
+    if (clicks > 0) {
+      total_clicks_lifetime = r.clicks;
+      total_clicks_lifetime_rollover = r.rollover;
     }
-    _lifetime_seconds_saved += rtc_delta_seconds;
-    if (rtc_delta_clicks > 0 || rtc_delta_seconds > 0) {
-      Log::console(PSTR("Lifetime: recovered %lu clicks + %lu s from RTC"),
-                   (unsigned long)rtc_delta_clicks,
-                   (unsigned long)rtc_delta_seconds);
+    _life_saved_s += secs;
+    if (clicks > 0 || secs > 0) {
+      corium::Log::console(PSTR("Lifetime: Recovered %lu clicks + %lu s from RTC"),
+                           (unsigned long)clicks,
+                           (unsigned long)secs);
     }
   }
   _running = true;
@@ -652,58 +743,47 @@ bool Counter::blip_led() {
 
 void Counter::dispatchReceiverBlip() {
   _last_blip = micros();
-  // else audio fires twice and udpblip echoes
+  // Mark it seen, else loop() fires audio again and udpblip echoes it back out
   _last_blip_seen = _last_blip;
-  ClickHooks::rx_click(blip_led());
+  _rx_clicks.fire((uint32_t)_last_blip_seen);
 }
 
 bool Counter::is_quiet_now() {
   return _quiet.active();
 }
 
-// NOLINTNEXTLINE(complexity) hot path
-void Counter::loop() {
-  if (_pending_work) {
-    uint8_t pw = _pending_work;
-    _pending_work = 0;
-    if (pw & PENDING_RTC) {
-      uint32_t delta_s = 0;
-      if (_last_save_time_t > 0 && _rtc_pending_now >= _last_save_time_t) {
-        delta_s = _rtc_pending_now - _last_save_time_t;
-      }
-      if (_rtc_unsaved_clicks > 0 || delta_s > 0) {
-        rtc_life_stash(_rtc_unsaved_clicks, delta_s);
-      }
-    }
-    if (pw & PENDING_SAVE) {
-      save_lifetime();
-    }
+// rare, kept out of the loop pass
+void __attribute__((noinline)) Counter::run_pending() {
+  if (_pending_work & PENDING_SECOND) {
+    _pending_work &= ~PENDING_SECOND;
+    while (_secs_due) { _secs_due--; second_work(); }
   }
+  uint8_t pw = _pending_work;
+  _pending_work = 0;
+  if (pw & PENDING_RTC) rtc_life_stash(total_clicks_lifetime, total_clicks_lifetime_rollover, _life_saved_s);
+  if (pw & PENDING_SAVE) {
+    (void)save_lifetime();
+  }
+  if (pw & PENDING_ALARM) corium::Registry::emit(TOPIC_ALARM);
+  if (pw & PENDING_COUNTS) corium::Registry::emit(TOPIC_COUNTS);
+}
 
-#if GEIGER_IS_SERIAL(GEIGER_TYPE) || GEIGER_IS_TEST(GEIGER_TYPE)
-  geigerinput->loop();
-#elif defined(COUNTER_DRAINS_PCNT)
-  {
-    uint32_t pcnt_ms = fast_millis();
-    if ((uint32_t)(pcnt_ms - _pcnt_ms) >= PCNT_DRAIN_MS) {
-      _pcnt_ms = pcnt_ms;
-      static_cast<GeigerPulse*>(geigerinput)->drain_pcnt();
-    }
-  }
-#elif GEIGER_IS_UDPRX(GEIGER_TYPE)
-  geigerinput->loop();
-#endif
+void Counter::loop() {
+  if (_pending_work) run_pending();
+
+  static_cast<InputType*>(_input)->loop();
 
   unsigned long lb = _last_blip;
   if (_last_blip_seen != lb) {
     _last_blip_seen = lb;
 
+    // inputs without on_pulse fill the histogram here
     if (!s_hist_from_isr) {
       if (_hist_primed) _pulse_hist[interval_bucket((uint32_t)(lb - _prev_blip_us))]++;
       else _hist_primed = true;
       _prev_blip_us = lb;
     }
 
-    ClickHooks::click((uint32_t)lb, blip_led());
+    _clicks.fire((uint32_t)lb);
   }
 }

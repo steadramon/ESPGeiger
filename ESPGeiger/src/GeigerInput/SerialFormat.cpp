@@ -22,17 +22,19 @@
 #include "SerialParse.h"
 #include "GeigerInput.h"
 #include "Corium/Util/StringUtil.h"
+#include "Corium/Measure/Measure.h"
 #include "Corium/Measure/OutputVars.h"
 #include "Corium/Util/Words.h"
+#include "Corium/Prefs/Prefs.h"
+#include "App/AppKeys.h"
+#include "App/MeasureIds.h"
 #include "Counter/Counter.h"
-#include "Corium/Prefs/EGPrefs.h"
 #include <string.h>
 
 #define EG_HAS_SERIAL_PARSERS GEIGER_IS_SERIAL(GEIGER_TYPE)
 
 namespace SerialFormat {
 
-// MightyOhm uSv/hr = CPM / 175
 static constexpr float MIGHTYOHM_USV_DIV = 175.0f;
 
 const char* mohm_mode(int cps) {
@@ -40,21 +42,21 @@ const char* mohm_mode(int cps) {
 }
 
 size_t fmt_mightyohm(char* buf, size_t cap) {
-  int cps = gcounter.get_last_cps();
-  int reported_cpm = gcounter.get_cpm();
+  int cps = (int)gcounter.get_last_cps();
+  int cpm = (int)gcounter.get_cpm();
   // cps*60 overflows int above ~35.8M cps
-  if (cps > 255) reported_cpm = (cps > 35791394) ? 2147483647 : cps * 60;
-  char usv_str[12];
-  format_f(usv_str, sizeof(usv_str), reported_cpm * (1.0f / MIGHTYOHM_USV_DIV));
+  if (cps > 255) cpm = (cps > 35791394) ? 2147483647 : cps * 60;
+  char usv[12];
+  format_f(usv, sizeof(usv), cpm * (1.0f / MIGHTYOHM_USV_DIV));
   int n = snprintf_P(buf, cap, PSTR("CPS, %d, CPM, %d, uSv/hr, %s, %s\n"),
-                     cps, reported_cpm, usv_str, mohm_mode(cps));
+                     cps, cpm, usv, mohm_mode(cps));
   return (n < 0 || (size_t)n >= cap) ? 0 : (size_t)n;
 }
 
 size_t fmt_user_template(char* buf, size_t cap) {
-  const char* tpl = EGPrefs::getString("sout", EG_K_TPL);
+  const char* tpl = corium::Prefs::getString("sout", EG_K_TPL);
   if (!tpl || !*tpl) return 0;
-  size_t n = OutputVars::renderTemplate(tpl, buf, cap);
+  size_t n = corium::OutputVars::renderTemplate(tpl, buf, cap);
   if (n > 0 && buf[n - 1] != '\n' && n < cap - 1) {
     buf[n++] = '\n';
     buf[n]   = '\0';
@@ -85,9 +87,9 @@ static const char T_CRLF[]   PROGMEM = "{cpm}\r\n";
 #endif
 static const char N_MOHM[]   PROGMEM = "MightyOhm";
 static const char N_ESPG[]   PROGMEM = "ESPGeiger";
-static const char N_TPL[]    PROGMEM = "Template";
 static const char T_ESPG[]   PROGMEM = "CPM: {cpm}\n";
 
+// id, baud, name, line template, formatter, parser, sends cps
 static const TypeInfo TYPES[] PROGMEM = {
 #if EG_HAS_SERIAL_PARSERS
   { GEIGER_STYPE_GC10,      9600,   N_GC10,   T_CRLF,  nullptr,            IF_PARSE(parse_gc10),      false },
@@ -95,7 +97,7 @@ static const TypeInfo TYPES[] PROGMEM = {
 #endif
   { GEIGER_STYPE_MIGHTYOHM, 9600,   N_MOHM,   nullptr, fmt_mightyohm,      IF_PARSE(parse_mightyohm), true  },
   { GEIGER_STYPE_ESPGEIGER, 115200, N_ESPG,   T_ESPG,  nullptr,            IF_PARSE(parse_espgeiger), false },
-  { GEIGER_STYPE_TEMPLATE,  115200, N_TPL,    nullptr, fmt_user_template,  IF_PARSE(parse_template),  false },
+  { GEIGER_STYPE_TEMPLATE,  115200, EG_L_TPL, nullptr, fmt_user_template,  IF_PARSE(parse_template),  false },
 };
 static constexpr uint8_t TYPE_COUNT = sizeof(TYPES) / sizeof(TYPES[0]);
 
@@ -112,7 +114,7 @@ const char* name_for(uint8_t type)  { TypeInfo t; return find(type, t) ? t.name 
 bool        is_known(uint8_t type)  { TypeInfo t; return find(type, t); }
 bool        has_cps(uint8_t type)   { TypeInfo t; return find(type, t) ? t.has_cps : false; }
 
-// TYPES order
+// same order as TYPES
 const char TYPE_OPTS[] PROGMEM =
 #if EG_HAS_SERIAL_PARSERS
   "GC10|GC10Next|"
@@ -121,9 +123,7 @@ const char TYPE_OPTS[] PROGMEM =
 
 static size_t render_tpl_P(const char* tpl, char* buf, size_t cap) {
   char t[16];
-  strncpy_P(t, tpl, sizeof(t) - 1);
-  t[sizeof(t) - 1] = '\0';
-  return OutputVars::renderTemplate(t, buf, cap);
+  return corium::OutputVars::renderTemplate(flashToRam(tpl, t, sizeof(t)), buf, cap);
 }
 
 size_t format_line(uint8_t type, char* buf, size_t cap) {

@@ -17,30 +17,67 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef MATHUTIL_H
-#define MATHUTIL_H
+#ifndef CORIUM_MATHUTIL_H
+#define CORIUM_MATHUTIL_H
 
 #include <math.h>
 #include <stdint.h>
+#include <string.h>
 
 template <typename T>
 constexpr T clamp(T v, T lo, T hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// 0-100 -> 0..top, squared: eyes see the low end
-inline uint32_t brightness_curve(uint32_t pct, uint32_t top) {
+// 0-100 -> 0..top, squared since eyes see more change at the low end
+inline uint32_t brightnessCurve(uint32_t pct, uint32_t top) {
   if (pct > 100) pct = 100;
   return (pct * pct * top + 5000) / 10000;
 }
 
-inline float poisson_std(float N) {
-  return N > 0.0f ? sqrtf(N) : 0.0f;
+// Not NaN or inf. Tests the bits as an int, so no soft-float call
+inline bool isFinite(float v) {
+  uint32_t b;
+  memcpy(&b, &v, sizeof(b));
+  return (b & 0x7F800000u) != 0x7F800000u;
 }
 
-inline float poisson_z(float observed, float expected) {
-  float s = poisson_std(expected);
-  return s > 0.0f ? (observed - expected) / s : 0.0f;
+// 0-1000, a part past whole gives 1000
+inline uint16_t perMille(uint32_t part, uint32_t whole) {
+  if (whole == 0) return 0;
+  if (part >= whole) return 1000;
+  return (uint16_t)(((uint64_t)part * 1000u) / whole);
+}
+
+inline int16_t sat16(int32_t v) {
+  if (v >  32767) v =  32767;
+  if (v < -32768) v = -32768;
+  return (int16_t)v;
+}
+
+// 7/8 old, 1/8 new
+inline uint32_t ema8(uint32_t avg, uint32_t v) {
+  return (avg * 7 + v) >> 3;
+}
+
+// A NAN avg takes v, a NAN v keeps avg
+inline float emaNan(float avg, float v, float alpha) {
+  if (isnan(v)) return avg;
+  if (isnan(avg)) return v;
+  return avg * (1.0f - alpha) + v * alpha;
+}
+
+// Marsaglia 13/17/5, 0 stays 0
+inline uint32_t xorshift32(uint32_t x) {
+  x ^= x << 13;
+  x ^= x >> 17;
+  x ^= x << 5;
+  return x;
+}
+
+// folds a hwid into a seed, hi ^ lo
+inline uint32_t fold32(uint64_t v) {
+  return (uint32_t)(v ^ (v >> 32));
 }
 
 #endif

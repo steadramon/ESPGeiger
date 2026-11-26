@@ -13,7 +13,7 @@ supported boards. A short boot chime plays once when the device starts
 so you know the audio path is alive.
 
 **ESP32 only.** AudioTick uses the ESP-IDF I2S driver, which is not
-available on the ESP8266. See "Audible feedback on ESP8266" below for
+available on the ESP8266. The shipped builds are all ESP32-S3. See "Audible feedback on ESP8266" below for
 the alternative.
 
 ## Shipped builds
@@ -25,6 +25,9 @@ the alternative.
 
 On the generic families, verify your wiring matches the pins in Config before
 enabling. The XH-S3E envs have the pins locked to match the on-board speaker.
+
+On the XH-S3E the BOOT button (GPIO 0) mutes and unmutes all audio; the log
+says `Tick: muted` or `Tick: unmuted`.
 
 ## Audible feedback on ESP8266
 
@@ -38,22 +41,27 @@ powered speaker. No I2S amplifier required.
 
 | Setting | Key | Type | Default | Builds | Description |
 |---|---|---|---|---|---|
-| Enable | `tick.enable` | Boolean | `1` on | all | Reboot to apply after enabling. |
+| Enable | `tick.enable` | Boolean | `1` on | all | Restart to apply after enabling. |
 | Volume | `tick.volume` | Int 0-100 | `60` | all | `0` mutes; click amplitude scales linearly. |
-| Tone Hz | `tick.freq` | Int 300-6000 | `900` | all | Click centre frequency in Hz. |
-| Decay ms | `tick.decay` | Int 2-100 | `4` | all | Decay time constant of the click body, in ms. |
+| Tone (Hz) | `tick.freq` | Int 300-6000 | `900` | all | Click centre frequency in Hz. |
+| Decay (ms) | `tick.decay` | Int 2-100 | `4` | all | Decay time constant of the click body, in ms. |
 | Engine | `tick.engine` | `0` Pool (4 variants), `1` Chirp (single voice) | `0` Pool (4 variants) | all | Click synthesis engine. |
-| Peak % | `tick.peak` | Int 1-100 | `85` | all | Click amplitude ceiling (1-100). Lower = quieter and below NCN trip. |
-| Boot chime | `tick.chime` | `0` Off, `1` Random | `1` Random | all | Boot chime: off, or a random pick. |
-| I2S BCLK Pin | `tick.bclk` | Int 0-max GPIO | varies by build | boards without fixed pins | Reboot to apply |
-| I2S WS Pin | `tick.ws` | Int 0-max GPIO | varies by build | boards without fixed pins | Reboot to apply |
-| I2S DOUT Pin | `tick.dout` | Int 0-max GPIO | varies by build | boards without fixed pins | Reboot to apply |
+| Peak (%) | `tick.peak` | Int 1-100 | `85` | all | Click amplitude ceiling (1-100). Lower = quieter and below NCN trip. |
+| Boot chime | `tick.chime` | `0` Off, `1` Random, `2` Three beeps, `3` Folk melody, `4` DTMF, `5` Bit ping, `6` Coin, `7` Sputnik, `8` Item get | `1` Random | all | Boot chime: off, a random pick, or one chime. |
+| I2S BCLK pin | `tick.bclk` | Int 0-max GPIO | varies by build | boards without fixed pins | Restart to apply |
+| I2S WS pin | `tick.ws` | Int 0-max GPIO | varies by build | boards without fixed pins | Restart to apply |
+| I2S DOUT pin | `tick.dout` | Int 0-max GPIO | varies by build | boards without fixed pins | Restart to apply |
 
 <!-- /gen -->
 
+Test routes: `/tick` plays the configured boot chime, `/tick?c=N` plays
+chime N (2-8), `/tick?click=0` or `/tick?click=1` plays one click with the
+Pool or Chirp engine.
+
 ## Throttle
 
-Audio is rate-limited to 20 clicks/second. Above that the audio thins out
+Audio is rate-limited to about 33 clicks a second (one every 30 ms, bursts
+of up to 8). Above that the audio thins out
 while the counter still tracks every pulse.
 
 ## Voice announcer
@@ -64,9 +72,9 @@ Each announcement reads CPM as a natural English number ("two hundred and
 forty"), optionally followed by the dose ("twelve point three micro sievert
 per hour", switching to milli sievert above 1000 µSv/h). When CPM is above
 the warning or alert threshold the relevant state word prefixes the
-announcement ("alert. two hundred and forty CPM."). When RadMon uploading
-transitions state, the announcer can also say "RadMon online" or
-"RadMon offline" on the next interval boundary.
+announcement ("alert. two hundred and forty CPM."). When Radmon uploading
+transitions state, the announcer can also say "Radmon online" or
+"Radmon offline" on the next interval boundary.
 
 The announcer obeys the audio quiet-hours window: nothing is spoken
 between `klax.quiet_from` and `klax.quiet_to`.
@@ -78,9 +86,9 @@ between `klax.quiet_from` and `klax.quiet_to`.
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Announce | `klaxon.announce_enable` | Boolean | `0` off | Master switch for periodic announcements. |
-| Every (seconds) | `klaxon.announce_interval` | Int 10-3600 | `60` | Seconds between announcements. |
+| Every (s) | `klaxon.announce_interval` | Int 10-3600 | `60` | Seconds between announcements. |
 | Announce dose | `klaxon.announce_usv` | Boolean | `0` off | Append dose in µSv/h or mSv/h. |
-| RadMon up/down | `klaxon.announce_radmon` | Boolean | `0` off | Speak RadMon online/offline transitions. |
+| Radmon up/down | `klaxon.announce_radmon` | Boolean | `0` off | Speak RadMon online/offline transitions. |
 | Volume | `klaxon.voice_volume` | Int 1-100 | `80` | Voice volume. Independent of the click volume. |
 
 <!-- /gen -->
@@ -100,7 +108,7 @@ quiet-hours window suppresses the klaxon at night.
 | Pattern | Name | Sound |
 |---|---|---|
 | 0 | Alarm | Deep alternating high/low tones, reactor-style |
-| 1 | Two-Tone | Police two-tone wail |
+| 1 | Two-tone | Police two-tone wail |
 | 2 | Wail | Slow rising-and-falling air raid siren |
 | 3 | Horn | Naval AOOGA horn |
 | 4 | Voice | Cori says "alert" three times |
@@ -112,7 +120,7 @@ quiet-hours window suppresses the klaxon at night.
 | Setting | Key | Type | Default | Description |
 |---|---|---|---|---|
 | Klaxon on alert | `klax.enable` | Boolean | `0` off | Master switch. |
-| Pattern | `klax.type` | `0` Alarm, `1` Two-Tone, `2` Wail, `3` Horn, `4` Voice | `0` Alarm | Pattern (see table above). |
+| Pattern | `klax.type` | `0` Alarm, `1` Two-tone, `2` Wail, `3` Horn, `4` Voice | `0` Alarm | Pattern (see table above). |
 | Volume | `klax.volume` | Int 1-100 | `55` | Klaxon volume. |
 | Cooldown | `klax.cooldown` | Int 1-60 | `5` | Minutes to wait after a klaxon fires. |
 | Quiet from | `klax.quiet_from` | Time HH:MM | (empty) | Start of the audio quiet-hours window. Silences the klaxon and the voice announcer. Blank = off. |

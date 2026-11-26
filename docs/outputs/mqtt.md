@@ -20,8 +20,8 @@ ESPGeiger uses MQTT to publish radiation data from your Geiger counter. This sec
 
 | Topic | Description | Publish Interval Default |
 |---|---|---|
-| `ESPGeiger-<device_id>/tele/lwt` | Last Will and Testament. `Online` on connect, `Offline` via LWT on disconnect. | event |
-| `ESPGeiger-<device_id>/tele/sensor` | Radiation measurements bundle (CPM, uSv, CPS, CPM5, CPM15, HV, warn, alert). | 60 s |
+| `ESPGeiger-<device_id>/tele/lwt` | Last Will and Testament. `Online` on connect, `Offline` via LWT on disconnect. Retained. A settings save sends `Offline` before it reconnects, so a rejoin the broker refuses still reads `Offline`. | event |
+| `ESPGeiger-<device_id>/tele/sensor` | Radiation measurements bundle (CPM, CPM5, CPM15, uSv, CPS, tube, warn, alert, health; HV and environment readings where fitted). | 60 s |
 | `ESPGeiger-<device_id>/tele/status` | Device state + diagnostics (time, uptime, IP, RSSI, counts, load metrics, memory, serial health on serial builds). | 60 s |
 
 ### Event topics
@@ -42,7 +42,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `ESPGeiger-<device_id>/stat/CPM15` | `29.10` | 60 s |
 | `ESPGeiger-<device_id>/stat/uSv` | `0.20` | 60 s |
 | `ESPGeiger-<device_id>/stat/CPS` | `0.50` | 60 s |
-| `ESPGeiger-<device_id>/stat/HV` | `412.00` | 60 s (ESPGeiger-HW only) |
+| `ESPGeiger-<device_id>/stat/HV` | `412.00` | 60 s (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
 | `ESPGeiger-<device_id>/stat/T` | `22.40` | 60 s (when an [environment sensor](/configuration/env) is present) |
 | `ESPGeiger-<device_id>/stat/H` | `45.60` | 60 s (BME280 / AHT family only) |
 | `ESPGeiger-<device_id>/stat/P` | `1013.20` | 60 s (BME280 / BMP280 only) |
@@ -50,7 +50,7 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 ## Example `tele/sensor` JSON
 
 ```json
-{"cpm":87.00,"usv":0.51,"cps":1.45,"cpm5":149.76,"cpm15":212.07,"warn":1,"alert":0}
+{"cpm":87.00,"cpm5":149.76,"cpm15":212.07,"usv":0.5100,"cps":1.45,"tube":1,"sat":0,"warn":1,"alert":0,"health":"ok","problem":0}
 ```
 
 | Field | Description |
@@ -58,33 +58,39 @@ Planned for removal in a future release - prefer consuming `tele/sensor` JSON in
 | `cpm` | Current CPM |
 | `cpm5` | 5-minute smoothed CPM |
 | `cpm15` | 15-minute smoothed CPM |
-| `usv` | μSv/h (cpm × ratio) |
+| `usv` | uSv/h (cpm / ratio) |
 | `cps` | Counts per second |
-| `hv` | HV reading (ESPGeiger-HW only) |
+| `hv` | HV reading in whole volts (builds with HV feedback: ESPGeiger-HW, `*_hv`) |
+| `hv_fault` | `1` while HV is held off: over the voltage limit (same builds) |
 | `t` | Temperature in °C ([environment sensor](/configuration/env) only) |
 | `h` | Humidity in % (BME280 / AHT family only) |
 | `p` | Pressure in hPa (BME280 / BMP280 only) |
+| `tube` | `1` while counts are arriving, `0` once the tube has been silent longer than expected for its count rate. Home Assistant's **Tube Active** reads this. |
+| `sat` | `1` when the count rate is close to the tube's dead-time limit, so readings will under-report |
 | `warn` | `1` when CPM is above configured warning threshold |
 | `alert` | `1` when CPM is above configured alert threshold |
+| `health` | `ok`, or what is wrong, comma split (see [the JSON fields](/output/integrations)). Home Assistant's **Health** reads this. |
+| `problem` | `1` while a tube or HV word is on in `health` (not the device's `crashed`, `noclock`, `savefail`, `lowheap`). Home Assistant's **Tube Problem** reads this. |
 
 ## Example `tele/status` JSON
 
 ```json
-{"time":"2026-04-18T14:52:52Z","ut":120,"board":"ESP-12E","model":"ESPGeiger-Log","ssid":"MyWiFi","ip":"192.168.1.166","rssi":-37,"c_total":165,"tick":953,"t_max":4870,"lps":58733,"free_mem":16928}
+{"time":"2026-04-18T14:52:52Z","ut":120,"board":"ESPG-LOG","model":"ESPGeiger-Log","ssid":"MyWiFi","ip":"192.168.1.166","rssi":-37,"c_total":165,"tick":953,"t_max":4870,"lps":58733,"free_mem":16928}
 ```
 
 | Field | Description |
 |---|---|
 | `time` | Current device time (ISO 8601 UTC, with `Z` suffix) |
 | `ut` | Uptime in seconds |
-| `board` | ESP chip model |
+| `board` | Board name on ESPGeiger kits (`ESPG-HW`, `ESPG-LOG`, `ESPG-LT`), else the chip (`ESP8266`, `ESP32-S3` etc.) |
 | `model` | Configured Geiger model |
 | `ssid` | Connected WiFi SSID |
 | `ip` | Device IP address |
 | `rssi` | WiFi signal (dBm) |
 | `c_total` | Total clicks since boot |
-| `tick` | Smoothed device-load figure (μs spent in the once-per-second housekeeping pass) |
+| `tick` | Smoothed device-load figure (µs spent in the once-per-second housekeeping pass) |
 | `t_max` | Peak `tick` in last 60 s |
 | `lps` | Loop iterations per second |
 | `free_mem` | Free heap (bytes) |
+| `cpu_temp` | Chip die temperature (°C), not ambient. ESP32 family only. |
 | `ser_ok` | `1` when the external serial counter has sent a valid line within the last 60 s, `0` otherwise. Serial builds only - absent from pulse builds. |

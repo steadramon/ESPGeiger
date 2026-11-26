@@ -1,5 +1,5 @@
 /*
-  BootGuard.cpp - see header.
+  BootGuard.cpp - safe mode after crashes
 
   Copyright (C) 2026 @steadramon
 
@@ -29,22 +29,23 @@
 #include <esp_attr.h>
 #endif
 
+namespace corium {
 namespace BootGuard {
 
 static constexpr uint32_t MAGIC = 0xE56B0014;
 
 #ifdef ESP8266
 typedef RtcSlot<State, RtcMap::BOOTGUARD_AT, RtcMap::BOOTGUARD_WORDS> Slot;
-static State s;
+static State s_state;
 
 static void load() {
-  if (!Slot::read(s)) s.magic = 0;
+  if (!Slot::read(s_state)) s_state.magic = 0;
 }
 static void save() {
-  Slot::write(s);
+  Slot::write(s_state);
 }
 #else
-static RTC_NOINIT_ATTR State s;   // garbage after power-on, magic catches it
+static RTC_NOINIT_ATTR State s_state;   // Garbage after power-on, the magic check catches it
 
 static void load() {}
 static void save() {}
@@ -52,39 +53,51 @@ static void save() {}
 
 static uint32_t s_retry_ms = 0;
 static bool     s_entered = false;
+static bool     s_portal = false;
 
-void on_boot() {
+void onBoot() {
   load();
-  bool was_safe = s.safe;
+  bool was_safe = s_state.safe;
   Ending end = ending(DeviceInfo::resetReason());
-  if (CrashDump::hasCrash()) end = END_CRASH;   // esp8266 abort() looks like a restart
-  apply(s, MAGIC, DeviceInfo::fwFingerprint(), end);
-  if (s.safe) {
+  // An esp8266 abort() looks like a restart, so go by the dump. A brownout that left a dump stays a brownout
+  if (CrashDump::reset().crash && end != END_BROWNOUT) end = END_CRASH;
+  apply(s_state, MAGIC, DeviceInfo::fwFingerprint(), end);
+  s_portal = s_state.portal;   // this boot only
+  s_state.portal = 0;
+  if (s_state.safe) {
     s_entered = !was_safe;
-    s_retry_ms = retry_ms(s.retries);
-    if (s.retries < 255) s.retries++;
+    // Counts the times safe mode came back, not each safe boot
+    if (s_entered && s_state.retries < 255) s_state.retries++;
+    s_retry_ms = retryMs(s_state.retries ? s_state.retries - 1 : 0);
   }
   save();
 }
 
-void request_safe() {
-  s.enter = 1;
+void scram() {
+  s_state.enter = 1;
   save();
 }
 
-void mark_lived() {
-  s.lived = 1;
+void requestPortal() {
+  s_state.portal = 1;
   save();
 }
 
-void mark_day() {
-  s.retries = 0;
+void markLived() {
+  s_state.lived = 1;
   save();
 }
 
-bool     safe_mode()    { return s.safe; }
+void markDay() {
+  s_state.retries = 0;
+  save();
+}
+
+bool     safeMode()    { return s_state.safe; }
 bool     entered()      { return s_entered; }
-uint32_t retry_after()  { return s_retry_ms; }
-uint8_t  crash_streak() { return s.crash_streak; }
+uint32_t retryAfterMs()  { return s_retry_ms; }
+uint8_t  crashStreak() { return s_state.crashStreak; }
+bool     portalAsked() { return s_portal; }
 
 }
+}  // namespace corium

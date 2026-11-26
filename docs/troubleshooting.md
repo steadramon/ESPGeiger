@@ -9,12 +9,12 @@ nav_order: 7
 
 Common problems, what they look like and where to look first.
 
-## Device restarts by itself / "Last reset: Brownout"
+## Device restarts by itself / "Restart reason: Brownout"
 
 **Sort out your power supply.** This is by far the most common hardware
 problem and almost never a firmware issue.
 
-On ESP32 boards the `/info` page reports it directly: **Last reset:
+On ESP32 boards the `/info` page reports it directly: **Restart reason:
 Brownout** means the supply voltage dipped below the safe threshold and the
 chip protected itself by resetting. The usual suspects, in order:
 
@@ -22,7 +22,8 @@ chip protected itself by resetting. The usual suspects, in order:
   under load. WiFi transmit bursts draw sharp current spikes; a marginal
   supply drops just long enough to trigger a reset. Use a supply rated 1A+
   and a short, decent cable.
-- **Sharing the supply with the geiger counter.** ESP32 devices draw a lot of power
+- **Sharing the supply with the geiger counter.** ESP32 devices draw a lot of power,
+  so a supply that runs both can sag.
 - **Powering from a PC hub port.** Unpowered hubs are a classic source of
   mystery resets.
 
@@ -31,6 +32,14 @@ up differently: random resets ("Hardware watchdog"), WiFi dropouts, or
 crashes that never repeat in the same place. If a device misbehaves
 erratically and the crash reasons keep changing, try a better power supply
 before anything else.
+
+## Home page says SAFE MODE
+
+The device crashed 3 times in a row soon after boot, or safe mode was asked
+for. Counting and outputs are stopped, but the web pages, Config and Update
+still work. See [Safe Mode](/configuration/safemode) for what to do.
+Brownouts don't count toward it: a device with a poor supply keeps
+restarting instead (above).
 
 ## Device is online but shows 0 CPM
 
@@ -49,6 +58,9 @@ are not reaching the board:
 - **Pulse polarity or level.** Counter boards differ in whether the pulse
   output idles high or low. If everything is wired and powered but silent,
   check the counting board's output against what your build expects.
+- **PCNT pull.** On ESP32 boards counting with Hardware (PCNT), a pull-up
+  can hold some modules' output high so nothing counts. **PCNT pull** on the
+  Input tab is None by default; see [PCNT](/hardware/esphardware#pcnt).
 
 The warning clears itself the moment the first count arrives.
 
@@ -58,8 +70,10 @@ The warning clears itself the moment the first count arrives.
 GeigerPulse: ISR storm (N/s) - parked 5s
 ```
 
-The input pin is seeing more than 10,000 edges a second, far beyond any
-Geiger tube. Counting pauses for 5 seconds, then retries. The usual causes:
+The input pin is seeing more than <!-- gen:const GeigerInput::STORM_COUNTS comma -->10,000<!-- /gen --> edges a second, far beyond any
+Geiger tube. Counting pauses for <!-- gen:const ISR_STORM_COOLDOWN_S s -->5 seconds<!-- /gen -->, then retries. If the storm is
+still there each pause is twice as long, up to <!-- gen:const ISR_STORM_MAX_S s -->5 minutes<!-- /gen -->; a quiet second
+starts it back at <!-- gen:const ISR_STORM_COOLDOWN_S -->5<!-- /gen -->. The usual causes:
 
 - **Floating input.** Nothing connected to the input pin, or a loose wire.
 - **Noisy cable.** A long or unshielded pulse wire picking up mains hum or
@@ -67,19 +81,29 @@ Geiger tube. Counting pauses for 5 seconds, then retries. The usual causes:
 - **Failed tube** oscillating instead of producing clean pulses.
 
 Counting resumes by itself once the input is quiet and the log shows
-`GeigerPulse: re-armed after storm cooldown`. WiFi, the web pages and MQTT
+`GeigerPulse: Re-armed after storm cooldown`. WiFi, the web pages and MQTT
 keep running while counting is paused.
 
-This check is on builds that count pulses with an interrupt: all ESP8266 and
-ESP32-C3 pulse builds and ESP32 `no_pcnt` builds. Other ESP32 builds count
-in hardware and don't need it.
+This check is on when pulses are counted with an interrupt: all ESP8266 and
+ESP32-C3 pulse builds, and ESP32 pulse builds set to **Count with** Interrupt
+(the default on the `no_pcnt` builds). Counting with
+Hardware (PCNT) drops any second over <!-- gen:const GeigerInput::STORM_COUNTS comma -->10,000<!-- /gen --> counts instead and logs
+`GeigerPulse: PCNT storm (N/s) - dropped`.
+
+## Health is not "ok"
+
+The `health` field in `/json` and MQTT (Home Assistant's **Health**) names
+what is wrong: `silent` (no counts, above), `storm` (above), `chatter` (the
+input rings, the log says `GeigerPulse: Tube chatter, check tube/HV/wiring`),
+`no_input` (a serial or UDP source not reporting), the HV words, then the
+device's own. Each is listed under [the JSON fields](/output/integrations).
 
 ## WiFi keeps dropping
 
 - Check **RSSI** on the `/info` page: weaker than about -80 dBm is
   unreliable in practice. Move the device or the access point.
 - A reduced **TX power** setting saves energy but shrinks range - the
-  current value is shown on `/info`.
+  current value, in dBm, is `tx` in `/about`.
 - Erratic drops combined with random resets: see the power supply section
   above - WiFi transmit is exactly when a weak supply gives out.
 
@@ -91,8 +115,20 @@ in hardware and don't need it.
 - **CPM much higher than expected**: look for electrical noise pickup -
   long unshielded pulse wires near the HV side can double-count.
 
+## Some settings went back to their defaults
+
+Every settings file is checked when the device starts. If the log says
+`Prefs: <group> damaged, defaults`, that file was corrupted on flash: the
+group runs on its defaults and the damaged copy is kept as
+`<group>.bin.bad` until the group is saved after a restart. Set those
+settings again.
+The web password and the Stations key are restored from their backup copy
+(`Web password restored from backup`, `Key restored from backup`).
+
+`/info` shows how full the file storage is under **Files**.
+
 ## When reporting a problem
 
-Include the `/info` page contents (platform, version, last reset reason)
+Include the `/info` page contents (platform, version, restart reason)
 and, for crashes, the exception details shown there. A photo of the wiring
 helps more often than you would expect.

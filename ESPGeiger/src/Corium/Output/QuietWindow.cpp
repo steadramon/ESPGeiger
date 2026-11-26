@@ -21,21 +21,22 @@
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Clock.h"
 
-void QuietWindow::set(const char* from, const char* to) {
-  _from = quiet_minute(from);
-  _to = quiet_minute(to);
-  _recompute_ms = fast_millis();
+void corium::QuietWindow::set(const char* from, const char* to) {
+  _from = quietMinute(from);
+  _to = quietMinute(to);
+  _recompute_ms = corium::fastMillis();
 }
 
-// every click, cached to the minute, localTm() is slow
-bool QuietWindow::active() {
+// Cached until the next minute, localTm() is slow
+bool corium::QuietWindow::active() {
   if (_from < 0 || _to < 0 || _from == _to) return false;   // off
-  if (!Clock::synced) return false;
-  unsigned long now_ms = fast_millis();
-  if ((long)(now_ms - _recompute_ms) < 0) return _cached;
+  if (!corium::Clock::synced) return false;
+  unsigned long now_ms = corium::fastMillis();
+  // a recompute more than a minute ahead is stale, so redo it
+  if (!corium::reached(now_ms, _recompute_ms) && (uint32_t)(_recompute_ms - now_ms) <= 60000UL) return _quiet;
   struct tm t;
-  if (!Clock::localTm(&t)) return false;
-  _cached = quiet_in_window(t.tm_hour * 60 + t.tm_min, _from, _to);
+  if (!corium::Clock::localTm(&t)) return false;
+  _quiet = quietInWindow(t.tm_hour * 60 + t.tm_min, _from, _to);
   _recompute_ms = now_ms + (60UL - t.tm_sec) * 1000UL;
-  return _cached;
+  return _quiet;
 }

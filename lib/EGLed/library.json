@@ -1,7 +1,7 @@
 {
   "name": "EGLed",
   "version": "0.1.0",
-  "description": "Tiny non-blocking LED driver: blink, pulse, brightness, polarity. Thin facade so the application doesn't depend on a specific underlying state-machine library.",
+  "description": "Blink, pulse and brightness for a status LED.",
   "keywords": "led, blink, esp8266, esp32",
   "license": "GPL-3.0",
   "frameworks": "arduino",

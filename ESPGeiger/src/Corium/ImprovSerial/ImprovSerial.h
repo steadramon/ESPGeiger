@@ -17,45 +17,45 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef IMPROVSERIAL_H
-#define IMPROVSERIAL_H
+#ifndef CORIUM_IMPROVSERIAL_H
+#define CORIUM_IMPROVSERIAL_H
 
 #include <Arduino.h>
 #include <improv.h>
 #include <string>
-#include <vector>
 
+namespace corium {
 class ImprovSerial {
 public:
   void begin();
-  // Feed one byte to the parser. Returns true if it was part of an
-  // in-flight Improv frame; the caller should drop it. Returns false
-  // for out-of-frame bytes, which the caller keeps.
-  bool consume_byte(uint8_t b);
-  // Pull pending Serial bytes through the parser. Only call from contexts
-  // where SerialCommand's main-loop polling isn't running (setup, the
-  // captive-portal busy-wait); otherwise the two race on Serial.read().
+  // true = an Improv byte, the caller drops it
+  bool consumeByte(uint8_t b);
+  // Only for setup and the portal wait, otherwise it races the console on Serial.read()
   void poll();
-  bool isProvisioning() const { return _state == improv::STATE_PROVISIONING; }
+  // Each console pass, sends the answer once a WIFI_SETTINGS test has ended
+  void watch();
 
 private:
   void set_state(improv::State s);
-  void send_frame(improv::ImprovSerialType type, const std::vector<uint8_t>& payload);
-  void send_response_data(improv::Command cmd, const std::vector<std::string>& datum);
+  void send_frame(improv::ImprovSerialType type, const uint8_t* payload, size_t len);
+  void send_response_data(improv::Command cmd, const char* const* datum, uint8_t n);
+  void send_url(improv::Command cmd);
   void send_error(improv::Error err);
   bool on_command(improv::ImprovCommand cmd);
   void on_error(improv::Error err);
   void send_device_info();
   void send_wifi_networks();
   void handle_wifi_settings(const std::string& ssid, const std::string& password);
+  void finish();
 
-  uint8_t       _buffer[128];
-  size_t        _position = 0;
+  uint8_t       _buf[128];   // one incoming frame
+  size_t        _pos = 0;
   improv::State _state = improv::STATE_AUTHORIZED;
   uint32_t      _last_byte_ms = 0;
-  bool          _in_wifi_settings = false;
+  bool          _joining = false;
 };
+}  // namespace corium
 
-extern ImprovSerial improvSerial;
+extern corium::ImprovSerial improvSerial;
 
 #endif

@@ -21,6 +21,7 @@
 
 extern const char EG_K_GEIGER_MODEL[];
 extern const char EG_K_SERIAL_TYPE[];
+extern const char EG_K_TUBE[];
 extern const char EG_K_TUBE_ALPHA[];
 extern const char EG_K_TUBE_BETA[];
 extern const char EG_K_TUBE_GAMMA[];

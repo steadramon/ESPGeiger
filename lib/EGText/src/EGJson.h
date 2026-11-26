@@ -21,14 +21,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// may be PROGMEM, overflow stays valid; with a sink flush() sends the rest
+// Keys may be PROGMEM, the output stays valid on overflow. With a sink, flush() sends the rest
 class EGJson {
 public:
   typedef void (*Sink)(void* arg, const char* s, size_t n);
 
   EGJson(char* buf, size_t cap, Sink sink = nullptr, void* arg = nullptr);
-  void flush();
+  void flush();   // send what is held, no-op without a sink
 
+  // key nullptr inside an array or at the top
   void map_begin(const char* key = nullptr);
   void map_end();
   void array_begin(const char* key = nullptr);
@@ -38,19 +39,23 @@ public:
   void uint(const char* key, uint32_t v);
   void sint(const char* key, int32_t v);
   void fixed(const char* key, float v, uint8_t decimals);   // nan / inf left out
+  void boolean(const char* key, bool v);
+  void null(const char* key);
 
+  // one string value from parts
   void str_begin(const char* key);
   void part(const char* s);
   void str_end();
 
-  size_t length() const { return _pos; }
-  bool overflow = false;
+  size_t length() const { return _pos; }   // bytes held, not yet sent
+  bool overflow = false;   // a field was dropped, the rest still closes
 
 private:
   void open(const char* key, char c);
   void close(char c);
   void name(const char* key);
   void put(const char* s, size_t n);
+  void num(const char* key, const char* t, int n);   // key and digits as one field
   void cut();
   void spill();
 
@@ -59,8 +64,8 @@ private:
   Sink    _sink;
   void*   _arg;
   size_t  _pos = 0;
-  size_t  _mark = 0;
-  uint8_t _depth = 0;
-  uint8_t _lost = 0;
+  size_t  _mark = 0;    // start of the field being written
+  uint8_t _depth = 0;   // open maps and arrays, one byte kept for each closer
+  uint8_t _lost = 0;    // opens dropped on overflow, their closes skipped
   bool    _first = true;
 };

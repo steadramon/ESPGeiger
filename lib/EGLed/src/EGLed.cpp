@@ -1,5 +1,5 @@
 /*
-  EGLed.cpp - see header.
+  EGLed.cpp - non-blocking LED driver
 
   Copyright (C) 2026 @steadramon
 
@@ -17,28 +17,33 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "EGLed.h"
+#include <EGClock.h>
 
 #ifdef ESP32
 #include <driver/ledc.h>
 #endif
 
-static uint32_t default_millis() { return ::millis(); }
-static EGLed::MillisFn s_clock = default_millis;
-
-void EGLed::setClock(MillisFn fn) {
-  s_clock = (fn != nullptr) ? fn : default_millis;
-}
+void EGLed::setClock(MillisFn fn) { EGClock::set(fn); }
 
 #ifdef ESP32
 
 namespace {
-  constexpr uint8_t kChannels  = SOC_LEDC_CHANNEL_NUM;
-  constexpr int     kLedFreqHz = 5000;
+  constexpr uint8_t LED_CHANNELS = SOC_LEDC_CHANNEL_NUM;
+  constexpr int     LED_HZ       = 5000;
 #ifdef SOC_LEDC_SUPPORT_HS_MODE
-  constexpr ledc_timer_t kTimer = LEDC_TIMER_0;
+  constexpr ledc_timer_t LED_TIMER = LEDC_TIMER_0;
+#elif SOC_LEDC_CHANNEL_NUM > 6
+  // 0 hv, 1 tone, 3 analogWrite (ch 7/6)
+  constexpr ledc_timer_t LED_TIMER = LEDC_TIMER_2;
 #else
-  // timers 0 and 1 belong to hv and tone
-  constexpr ledc_timer_t kTimer = LEDC_TIMER_3;
+  // 0 hv, 1 tone, 2 analogWrite (ch 5/4)
+  constexpr ledc_timer_t LED_TIMER = LEDC_TIMER_3;
+#endif
+  // Same clock ledcSetup uses, c3/s3 have one source for all timers. Never auto, on s3 the APLL fights I2S
+#ifdef SOC_LEDC_SUPPORT_XTAL_CLOCK
+  constexpr ledc_clk_cfg_t LED_CLK = LEDC_USE_XTAL_CLK;
+#else
+  constexpr ledc_clk_cfg_t LED_CLK = LEDC_USE_APB_CLK;
 #endif
 
   uint8_t s_next_chan   = 0;
@@ -49,20 +54,19 @@ namespace {
     ledc_timer_config_t cfg = {};
     cfg.speed_mode      = LEDC_LOW_SPEED_MODE;
     cfg.duty_resolution = LEDC_TIMER_8_BIT;
-    cfg.timer_num       = kTimer;
-    cfg.freq_hz         = kLedFreqHz;
-    // APB, on S3 APLL fights I2S
-    cfg.clk_cfg         = LEDC_USE_APB_CLK;
+    cfg.timer_num       = LED_TIMER;
+    cfg.freq_hz         = LED_HZ;
+    cfg.clk_cfg         = LED_CLK;
     ledc_timer_config(&cfg);
     s_timer_ready = true;
   }
 
   uint8_t next_chan() {
-    uint8_t c = (uint8_t)(s_next_chan++ % kChannels);
+    uint8_t c = (uint8_t)(s_next_chan++ % LED_CHANNELS);
 #ifndef SOC_LEDC_SUPPORT_HS_MODE
-    // low speed only, same numbers as Arduino's
+    // Low speed only, skip the hv and tone channels, same numbers as Arduino's
     while (c == EGLED_HV_CHANNEL || c == EGLED_TONE_CHANNEL)
-      c = (uint8_t)(s_next_chan++ % kChannels);
+      c = (uint8_t)(s_next_chan++ % LED_CHANNELS);
 #endif
     return c;
   }
@@ -88,11 +92,14 @@ void EGLed::attach(uint8_t pin, bool low_active) {
   cfg.speed_mode = LEDC_LOW_SPEED_MODE;
   cfg.channel    = (ledc_channel_t)_chan;
   cfg.intr_type  = LEDC_INTR_DISABLE;
-  cfg.timer_sel  = kTimer;
+  cfg.timer_sel  = LED_TIMER;
   cfg.duty       = 0;
   cfg.hpoint     = 0;
   ledc_channel_config(&cfg);
 #else
+#ifdef ESP8266
+  analogWriteRange(1023);   // core default is 255
+#endif
   pinMode(pin, OUTPUT);
 #endif
   _pin = pin;
@@ -134,17 +141,17 @@ void EGLed::blinkN(uint16_t on_ms, uint16_t off_ms, uint8_t count) {
   _cycles_left = count;
   writeDuty(_brightness);
   _state   = PHASE_ON;
-  _next_ms = s_clock() + on_ms;
+  _next_ms = EGClock::now() + on_ms;
 }
 
 void EGLed::fade(uint8_t shift) {
   _fade_shift = shift > 7 ? 7 : shift;
-  // 255 detaches pwm on esp8266
+  // Start at 254 at most, 255 detaches pwm on esp8266
   uint8_t start = _brightness > 254 ? 254 : _brightness;
   _fade_value = start;
   writeDuty(_fade_value);
   _state   = PHASE_FADE;
-  _next_ms = s_clock() + 5;
+  _next_ms = EGClock::now() + 5;
 }
 
 void EGLed::on() {
@@ -162,8 +169,9 @@ void EGLed::off() {
 
 void EGLed::update() {
   if (_state == IDLE) return;
-  uint32_t now = s_clock();
+  uint32_t now = EGClock::now();
   if ((int32_t)(now - _next_ms) < 0) return;
+  // Fade takes value >> shift off every 5 ms, at least 1
   if (_state == PHASE_FADE) {
     uint8_t delta = _fade_value >> _fade_shift;
     if (delta == 0) delta = 1;

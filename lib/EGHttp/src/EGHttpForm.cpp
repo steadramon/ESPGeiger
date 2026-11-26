@@ -24,6 +24,7 @@
 
 namespace {
 
+// one decoded byte, a bad %xx kept as is
 inline unsigned char next_byte(const char*& p, const char* end) {
   if (*p == '+') { p++; return ' '; }
   if (*p == '%' && end - p >= 3) {
@@ -51,11 +52,9 @@ inline bool decode_value(const char* q, const char* seg_end, char* out, size_t c
   return true;
 }
 
-}  // namespace
-
-bool eghttp_form_find(const char* region, size_t len, const char* name,
-                      char* out, size_t cap) {
-  if (!region || !name || !out || cap == 0) return false;
+// first value for name, still encoded
+inline bool find_value(const char* region, size_t len, const char* name,
+                       const char** value, const char** value_end) {
   const char* p   = region;
   const char* end = region + len;
   while (p < end) {
@@ -64,9 +63,50 @@ bool eghttp_form_find(const char* region, size_t len, const char* name,
     const char* eq = (const char*)memchr(p, '=', (size_t)(seg_end - p));
     const char* name_end = eq ? eq : seg_end;
 
-    if (name_matches(p, name_end, name) && seg_end != p)
-      return decode_value(eq ? eq + 1 : seg_end, seg_end, out, cap);
+    if (name_matches(p, name_end, name) && seg_end != p) {
+      *value = eq ? eq + 1 : seg_end;
+      *value_end = seg_end;
+      return true;
+    }
     p = amp ? amp + 1 : end;
   }
   return false;
+}
+
+}  // namespace
+
+bool eghttp_form_find(const char* region, size_t len, const char* name,
+                      char* out, size_t cap) {
+  if (!region || !name || !out || cap == 0) return false;
+  const char *v, *v_end;
+  return find_value(region, len, name, &v, &v_end) && decode_value(v, v_end, out, cap);
+}
+
+bool eghttp_form_fits(const char* region, size_t len, size_t cap) {
+  if (!region) return true;
+  const char* p   = region;
+  const char* end = region + len;
+  while (p < end) {
+    const char* amp = (const char*)memchr(p, '&', (size_t)(end - p));
+    const char* seg_end = amp ? amp : end;
+    const char* eq = (const char*)memchr(p, '=', (size_t)(seg_end - p));
+    // counts the same way decode_value does
+    size_t o = 0;
+    for (const char* q = eq ? eq + 1 : seg_end; q < seg_end;) {
+      if (next_byte(q, seg_end) == 0 || ++o >= cap) return false;
+    }
+    p = amp ? amp + 1 : end;
+  }
+  return true;
+}
+
+char* eghttp_form_take(char* region, size_t len, const char* name, size_t* out_len) {
+  if (!region || !name) return nullptr;
+  const char *v, *v_end;
+  if (!find_value(region, len, name, &v, &v_end)) return nullptr;
+  // Safe in place, decoding never writes ahead of the read
+  char* out = region + (v - region);
+  if (!decode_value(v, v_end, out, (size_t)(v_end - v) + 1)) return nullptr;
+  if (out_len) *out_len = strlen(out);
+  return out;
 }

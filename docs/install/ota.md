@@ -15,6 +15,8 @@ If you've never flashed the device before, use the [Web Installer](/install/webi
 instead - OTA only works on a device that's already connected to your Wi-Fi
 and reachable on your network.
 
+Set a [web password](/install/setup) first: without one, anyone on your network can flash the device, and images are not signed.
+
 ## 1. Download the firmware
 
 Grab the latest `.bin` file for your board from the
@@ -24,14 +26,16 @@ Every release includes one `.bin` per build variant. The filename tells you
 which one you need - **it must match the variant you originally installed**.
 For example:
 
-- `esp8266_pulse.v1.2.3.bin` - ESP8266 with a pulse-output tube
-- `esp8266_serial.v1.2.3.bin` - ESP8266 with a serial-output counter (GC10, MightyOhm, ...)
-- `espgeigerhw.v1.2.3.bin` - ESPGeiger-HW board
-- `espgeigerlog_pulse.v1.2.3.bin` - ESPGeiger Log with a pulse tube
+- `esp8266_pulse-firmware.v1.2.3.bin` - ESP8266 with a pulse-output tube
+- `esp8266_serial-firmware.v1.2.3.bin` - ESP8266 with a serial-output counter (GC10, MightyOhm, ...)
+- `espgeigerhw-firmware.v1.2.3.bin` - ESPGeiger-HW board
+- `espgeigerlog-firmware.v1.2.3.bin` - ESPGeiger Log with a pulse tube
 - ...etc
 
-Not sure which one you're running? The web portal shows the build name on
-the **Info** page as `BUILD_ENV` - match that.
+ESP32 builds also have a `-firmware_merged` file. That is the full image for
+a USB install; for OTA use the plain `-firmware` file.
+
+Not sure which one you're running? The **Info** page shows it in the **Build** row - match that.
 
 > ⚠️ Flashing the wrong variant will either refuse to boot or boot with the
 > wrong hardware assumptions (wrong pins, wrong counter type). If this
@@ -53,27 +57,50 @@ the firmware upload page.
 
 Click **Browse...** and pick the `.bin` you downloaded in step 1.
 
-## 5. Click **Update**
+The page checks the file before upload. **Looks compatible** means the file
+names the build you run; a **Warning** means it doesn't, and you can still
+upload if you are sure. A `_no_pcnt` device also accepts the plain
+`_pulse` file (see [Build Targets](/install/buildtargets#pulse)).
 
-Click the **Update** button on the upload page. The device:
+Boards that drive the tube's high voltage (`espgeigerhw`,
+`esp32_hv`, `esp8266_hv`, `esp8266oled_hv`) only take their own build:
+another build would leave the HV pin floating or drive it wrong, so the page
+says **Refused** and the device turns it down too. To move such a board to
+another build on purpose (e.g. `esp8266_hv` to `esp8266oled_hv`), post it
+with `?any=1`:
+
+```
+curl --data-binary @firmware.bin -H "Content-Type: application/octet-stream" "http://<device>/update?any=1"
+```
+
+Add `-u admin:<password>` if the portal has one. In [safe mode](/configuration/safemode) the Update page has an **Another build (an older firmware)** tick box that does the same. USB flashing always works.
+
+## 5. Click **Upload**
+
+Click **Upload**. The button stays greyed until a file is chosen. The device:
 
 - Shows *"Update in progress..."* on its OLED (if fitted)
-- Lights the activity LED
 - Stops all regular activity (MQTT publishes, WebAPI posts, serial output)
   to avoid interfering with the flash write
-- Receives the new firmware, writes it, verifies it and reboots
+- Receives the new firmware, writes it, verifies it and restarts
 
 Total time is typically **15-30 seconds** depending on your Wi-Fi. Don't
 close the browser tab until the upload bar finishes.
 
 ## After the update
 
-The device reboots into the new firmware. Wait about 10 seconds, the
+The device restarts into the new firmware. Wait about 10 seconds, the
 page should refresh. The version on the **Info** page should show the
 new release tag.
 
 Your settings (Wi-Fi credentials, MQTT config, tube ratio, etc.) survive
 the update - only the firmware code is replaced.
+
+## ESP32 4 MB table move
+
+Older ESP32 and ESP32-C3 boards make more room for future firmware once,
+about an hour after updating to 0.14. They restart twice and keep all
+their settings. There's nothing to do.
 
 ## If it fails
 
@@ -83,6 +110,8 @@ the update - only the firmware code is replaced.
   See the warning in step 1. Recover with the Web Installer over USB.
 - **Upload stalls partway** - usually Wi-Fi instability. Move closer to the
   router or use a wired-closer AP and retry.
+- **"Update failed: table move not done"** - an ESP32 is in the middle of its
+  [table move](#esp32-4-mb-table-move). Try again in a minute.
 
 ## Advanced: command-line OTA
 
@@ -93,7 +122,7 @@ upload). Send it with `--data-binary` so curl doesn't wrap the bytes in a
 multipart envelope:
 
 ```
-curl --data-binary @esp8266_pulse.v1.2.3.bin \
+curl --data-binary @esp8266_pulse-firmware.v1.2.3.bin \
   -H "Content-Type: application/octet-stream" \
   http://192.168.1.167/update
 ```
@@ -103,11 +132,11 @@ curl --data-binary @esp8266_pulse.v1.2.3.bin \
 > reads them as the entry-address and refuses the upload as
 > wrong-platform (`entry=0x2d2d2d2d`).
 
-If you've set a portal password under **Config -> System -> Web password**,
+If you've set a web password under **Config -> System -> Web password**,
 include Basic Auth:
 
 ```
-curl -u admin:<password> --data-binary @esp8266_pulse.v1.2.3.bin \
+curl -u admin:<password> --data-binary @esp8266_pulse-firmware.v1.2.3.bin \
   -H "Content-Type: application/octet-stream" \
   http://192.168.1.167/update
 ```
@@ -117,13 +146,25 @@ device rejects wrong-platform binaries server-side (entry-address check),
 so an ESP32 `.bin` sent at an ESP8266 device aborts before any flash
 writes happen.
 
-### Via espota.py (ArduinoOTA, port 8266)
+### Via espota.py (ArduinoOTA)
 
 A separate path that doesn't go through the web stack. `espota.py` ships
-with the Arduino ESP core:
+with the Arduino ESP core. It's off by default: tick **Arduino OTA** under
+System, Advanced, and restart. ESP8266 builds then listen on port 8266, ESP32
+builds (including C3 and S3) on port 3232:
 
 ```
-python espota.py -i 192.168.1.167 -p 8266 -f esp8266_pulse.v1.2.3.bin
+python espota.py -i 192.168.1.167 -p 8266 -f esp8266_pulse-firmware.v1.2.3.bin
 ```
+
+If you've set a web password, ArduinoOTA uses it too. Add it with `-a`:
+
+```
+python espota.py -i 192.168.1.167 -p 8266 -a <password> -f esp8266_pulse-firmware.v1.2.3.bin
+```
+
+Without it the upload fails with an auth error. ArduinoOTA only reads the
+password at boot, so after changing the web password restart the device
+before using the new one with espota.
 
 Useful if the web stack is wedged but ArduinoOTA is still alive.

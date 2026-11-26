@@ -19,15 +19,21 @@
 #ifdef AUDIO_TICK
 
 #include "AudioTick.h"
-#include "Voice/Voice.h"
+#include "App/AppKeys.h"
+#include "App/AppMath.h"
+#include "App/ChipVoice.h"
+#include "Counter/Counter.h"
 #include "Corium/Logger/Logger.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
-#include "Corium/System/Globals.h"
+#include "App/AppConfig.h"
 #include "Corium/System/PinSafety.h"
+#include "Corium/Util/MathUtil.h"
 #include "Corium/Util/StringUtil.h"
+#include "Corium/Util/Debounce.h"
+#include "Corium/Util/TokenBucket.h"
 #include <EGHttpServer.h>
 #include <Ticker.h>
 #include <math.h>
@@ -37,45 +43,65 @@
 #include <freertos/task.h>
 
 
-EG_PSTR(K_DECAY,  "decay");
-EG_PSTR(K_ENGINE, "engine");
-EG_PSTR(K_PEAK,   "peak");
-EG_PSTR(K_CHIME,  "chime");
-EG_PSTR(K_BCLK,   "bclk");
-EG_PSTR(K_WS,     "ws");
-EG_PSTR(K_DOUT,   "dout");
+CORIUM_PSTR(K_DECAY,  "decay");
+CORIUM_PSTR(K_ENGINE, "engine");
+CORIUM_PSTR(K_PEAK,   "peak");
+CORIUM_PSTR(K_CHIME,  "chime");
+CORIUM_PSTR(K_BCLK,   "bclk");
+CORIUM_PSTR(K_WS,     "ws");
+CORIUM_PSTR(K_DOUT,   "dout");
 
-#define TICK_STR_(x) #x
-#define TICK_STR(x) TICK_STR_(x)
 
 AudioTick audiotick;
-EG_REGISTER_MODULE(audiotick)
+CORIUM_REGISTER_MODULE(audiotick)
 
-static volatile bool s_nm_busy = false;
+static volatile bool s_owned = false;
 
-void AudioTick::setI2SOwned(bool owned) { s_nm_busy = owned; }
+void AudioTick::setI2SOwned(bool owned) { s_owned = owned; }
 
 static QueueHandle_t s_audio_q = nullptr;
+static volatile bool s_web = false;   // set by the routes, the worker clears it once played
+
+const char AT_QUEUED[] PROGMEM = "queued";
+const char AT_QFULL[]  PROGMEM = "queue full";
 
 bool audio_enqueue(const AudioCmd& cmd) {
   if (!s_audio_q) return false;
-  return xQueueSend(s_audio_q, &cmd, 0) == pdTRUE;
+  if (!cmd.web) return xQueueSend(s_audio_q, &cmd, 0) == pdTRUE;
+  // One web request at a time, else a pile of them means minutes with no clicks
+  if (s_web) return false;
+  s_web = true;
+  if (xQueueSend(s_audio_q, &cmd, 0) == pdTRUE) return true;
+  s_web = false;
+  return false;
+}
+
+static volatile AudioFn s_speech = nullptr;   // set once, from Voice begin()
+
+void audio_speech(AudioFn fn) { s_speech = fn; }
+
+static void to_speech(const AudioCmd& cmd) {
+  AudioFn fn = s_speech;
+  if (fn) fn(cmd);
+}
+
+static void speak(uint8_t type, uint8_t i1, int32_t i32) {
+  AudioCmd cmd = { type, i1, i32, nullptr, false };
+  to_speech(cmd);
 }
 
 void AudioTick::dispatch(const AudioCmd& cmd) {
-  if (_muted) return;
-  setI2SOwned(true);
-  switch (cmd.type) {
-    case AC_WORD:     voice.speakWord(cmd.word, 1.0f); break;
-    case AC_NUMBER:   voice.speakNumber(cmd.i32); break;
-    case AC_KLAXON:   voice.playKlaxon(cmd.i1); break;
-    case AC_ANNOUNCE: voice.announce(); break;
-    case AC_NUMBERS:  chimeNumbersStation(); break;
-    case AC_CHIME:    play_chime_now(cmd.i1); break;
-    case AC_CLICK:    playClick(cmd.i1); break;
-    default: break;
+  if (!muted()) {
+    setI2SOwned(true);
+    switch (cmd.type) {
+      case AC_NUMBERS:  chimeNumbersStation(); break;
+      case AC_CHIME:    play_chime_now(cmd.i1); break;
+      case AC_CLICK:    playClick(cmd.i1); break;
+      default:          to_speech(cmd); break;
+    }
+    setI2SOwned(false);
   }
-  setI2SOwned(false);
+  if (cmd.web) s_web = false;
 }
 
 static void audio_worker(void*) {
@@ -91,10 +117,14 @@ static void audio_worker_start() {
   if (s_audio_q) return;
   s_audio_q = xQueueCreate(8, sizeof(AudioCmd));
   if (!s_audio_q) {
-    Log::console(PSTR("Tick: audio queue alloc failed"));
+    corium::Log::console(PSTR("Tick: Audio queue alloc failed"));
     return;
   }
-  xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr);
+  if (xTaskCreate(audio_worker, "aud", 4096, nullptr, 1, nullptr) != pdPASS) {
+    corium::Log::console(PSTR("Tick: Audio task failed"));
+    vQueueDelete(s_audio_q);   // enqueue then refuses, a later start tries again
+    s_audio_q = nullptr;
+  }
 }
 
 #ifndef AUDIO_MUTE_PIN
@@ -102,38 +132,28 @@ static void audio_worker_start() {
 #endif
 
 static Ticker s_mute_ticker;
-static volatile bool     s_mute_last_read       = false;
-static volatile bool     s_mute_pressed         = false;
-static volatile uint32_t s_mute_last_change_ms  = 0;
+static corium::Debounce s_mute;
+static const uint16_t MUTE_DEBOUNCE_MS = 30;
 
-static void mute_tick() {
+static void mute_poll() {
   bool down = (digitalRead(AUDIO_MUTE_PIN) == LOW);
-  uint32_t now = fast_millis();
-  if (down != s_mute_last_read) {
-    s_mute_last_read = down;
-    s_mute_last_change_ms = now;
-    return;
-  }
-  if (down == s_mute_pressed) return;
-  if (now - s_mute_last_change_ms < 30) return;
-  s_mute_pressed = down;
+  if (!s_mute.step(down, corium::fastMillis(), MUTE_DEBOUNCE_MS)) return;
   if (down) {
     audiotick.toggleMute();
+    corium::Registry::post(&audiotick);
   }
 }
 
 static void mute_btn_start() {
   if (AUDIO_MUTE_PIN < 0) return;
-  if (const char* why = PinSafety::claim_input(AUDIO_MUTE_PIN, PSTR("AudioMute"))) {
-    Log::console(PSTR("Tick: mute pin=%d unsafe (%s)"), (int)AUDIO_MUTE_PIN, why);
+  if (const char* why = corium::PinSafety::claimInput(AUDIO_MUTE_PIN, PSTR("AudioMute"))) {
+    corium::Log::console(PSTR("Tick: Mute pin=%d unsafe (%s)"), (int)AUDIO_MUTE_PIN, why);
     return;
   }
   pinMode(AUDIO_MUTE_PIN, INPUT_PULLUP);
-  s_mute_last_read = (digitalRead(AUDIO_MUTE_PIN) == LOW);
-  s_mute_pressed = s_mute_last_read;
-  s_mute_last_change_ms = fast_millis();
-  s_mute_ticker.attach_ms(10, mute_tick);
-  Log::console(PSTR("Tick: mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
+  s_mute.reset(digitalRead(AUDIO_MUTE_PIN) == LOW, corium::fastMillis());
+  s_mute_ticker.attach_ms(10, mute_poll);
+  corium::Log::console(PSTR("Tick: Mute btn on GPIO %d"), (int)AUDIO_MUTE_PIN);
 }
 
 // 0 = dot, 1 = dash
@@ -151,75 +171,79 @@ static const uint8_t MORSE_DIGIT[10][5] = {
 };
 
 
-EG_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier");
-EG_PSTR(TK_L_FREQ,"Tone Hz");
-EG_PSTR(TK_H_FREQ,"Click centre frequency (300-6000 Hz)");
-EG_PSTR(TK_L_DEC, "Decay ms");
-EG_PSTR(TK_H_DEC, "Click decay time constant (2-100 ms)");
-EG_PSTR(TK_L_ENG, "Engine");
-EG_PSTR(TK_O_ENG, "Pool (4 variants)|Chirp (single voice)");
-EG_PSTR(TK_L_PK,  "Peak %");
-EG_PSTR(TK_H_PK,  "Click amplitude ceiling (1-100). Lower = quieter and below NCN trip.");
-EG_PSTR(TK_L_CHM, "Boot chime");
-// 2-8 valid but hidden
-EG_PSTR(TK_O_CHM, "Off|Random");
+CORIUM_PSTR(TK_H_EN,  "Audible Geiger click via I2S amplifier");
+CORIUM_PSTR(TK_L_FREQ,"Tone (Hz)");
+CORIUM_PSTR(TK_H_FREQ,"Click centre frequency");
+CORIUM_PSTR(TK_L_DEC, "Decay (ms)");
+CORIUM_PSTR(TK_H_DEC, "Click decay time constant");
+CORIUM_PSTR(TK_L_ENG, "Engine");
+CORIUM_PSTR(TK_O_ENG, "Pool (4 variants)|Chirp (single voice)");
+CORIUM_PSTR(TK_L_PK,  "Peak (%)");
+CORIUM_PSTR(TK_H_PK,  "Lower = quieter");
+CORIUM_PSTR(TK_L_CHM, "Boot chime");
+// Option value is the index, same as play_chime_now() takes
+CORIUM_PSTR(TK_O_CHM, "Off|Random|Three beeps|Folk melody|DTMF|Bit ping|Coin|Sputnik|Item get");
 #ifndef AUDIO_TICK_PINS_BLOCKED
-EG_PSTR(TK_L_BCLK,"I2S BCLK Pin");
-EG_PSTR(TK_L_WS,  "I2S WS Pin");
-EG_PSTR(TK_L_DOUT,"I2S DOUT Pin");
+CORIUM_PSTR(TK_L_BCLK,"I2S BCLK pin");
+CORIUM_PSTR(TK_L_WS,  "I2S WS pin");
+CORIUM_PSTR(TK_L_DOUT,"I2S DOUT pin");
 #endif
 
-static const EGPref TICK_PREF_ITEMS[] PROGMEM = {
-  {EG_K_ENABLE, EG_L_EN,   TK_H_EN,   "1",    nullptr, 0,   0,    0, EGP_BOOL, 0},
-  {EG_K_VOLUME, EG_L_VOL,  EG_H_VOL,  "60",   nullptr, 0,   100,  0, EGP_UINT, 0},
-  {EG_K_FREQ,   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, EGP_UINT, EGP_ADVANCED},
-  {K_DECAY,     TK_L_DEC,  TK_H_DEC,  "4",    nullptr, 2,   100,  0, EGP_UINT, EGP_ADVANCED},
-  {K_ENGINE,    TK_L_ENG,  nullptr,   "0",    TK_O_ENG, 0,  1,    0, EGP_ENUM, EGP_ADVANCED},
-  {K_PEAK,      TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, EGP_UINT, EGP_ADVANCED},
-  {K_CHIME,     TK_L_CHM,  nullptr,   "1",    TK_O_CHM, 0,  8,    0, EGP_ENUM, 0},
+static const corium::Pref TICK_PREF_ITEMS[] PROGMEM = {
+  {EG_K_ENABLE, EG_L_EN,   TK_H_EN,   "1",    nullptr, 0,   0,    0, corium::P_BOOL, corium::P_REBOOT},
+  {EG_K_VOLUME, EG_L_VOL,  EG_H_VOL,  "60",   nullptr, 0,   100,  0, corium::P_UINT, 0},
+  {EG_K_FREQ,   TK_L_FREQ, TK_H_FREQ, "900",  nullptr, 300, 6000, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_DECAY,     TK_L_DEC,  TK_H_DEC,  "4",    nullptr, 2,   100,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_ENGINE,    TK_L_ENG,  nullptr,   "0",    TK_O_ENG, 0,  1,    0, corium::P_ENUM, corium::P_ADVANCED},
+  {K_PEAK,      TK_L_PK,   TK_H_PK,   "85",   nullptr, 1,   100,  0, corium::P_UINT, corium::P_ADVANCED},
+  {K_CHIME,     TK_L_CHM,  nullptr,   "1",    TK_O_CHM, 0,  8,    0, corium::P_ENUM, 0},
 #ifndef AUDIO_TICK_PINS_BLOCKED
-  {K_BCLK,      TK_L_BCLK, EG_H_RBA,  TICK_STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
-  {K_WS,        TK_L_WS,   EG_H_RBA,  TICK_STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
-  {K_DOUT,      TK_L_DOUT, EG_H_RBA,  TICK_STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, EGP_UINT, EGP_ADVANCED | EGP_REBOOT | EGP_PIN_OUT},
+  {K_BCLK,      TK_L_BCLK, nullptr,  STR(AUDIO_TICK_BCLK), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_WS,        TK_L_WS,   nullptr,  STR(AUDIO_TICK_WS),   nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
+  {K_DOUT,      TK_L_DOUT, nullptr,  STR(AUDIO_TICK_DOUT), nullptr, 0, MAX_GPIO_PIN, 0, corium::P_UINT, corium::P_ADVANCED | corium::P_REBOOT | corium::P_PIN_OUT},
 #endif
 };
 
-static const EGPrefGroup TICK_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup TICK_PREF_GROUP PROGMEM = {
   "tick", "Audio Tick", 1,
   TICK_PREF_ITEMS,
   sizeof(TICK_PREF_ITEMS) / sizeof(TICK_PREF_ITEMS[0]),
-  EGP_CAT_OUTPUT, EG_K_ENABLE,
+  corium::P_CAT_OUTPUT, EG_K_ENABLE, 0,
 };
 
-const EGPrefGroup* AudioTick::prefs_group() { return &TICK_PREF_GROUP; }
+const corium::PrefGroup* AudioTick::prefsGroup() { return &TICK_PREF_GROUP; }
 
-void AudioTick::on_prefs_loaded() {
-  _enabled  = EGPrefs::getBool("tick", EG_K_ENABLE);
-  _volume   = (uint8_t)EGPrefs::getUInt("tick", EG_K_VOLUME);
-  _freq_hz  = (uint16_t)EGPrefs::getUInt("tick", EG_K_FREQ);
-  _decay_ms = (uint8_t)EGPrefs::getUInt("tick", K_DECAY);
-  _engine   = (uint8_t)EGPrefs::getUInt("tick", K_ENGINE);
-  _peak     = (uint8_t)EGPrefs::getUInt("tick", K_PEAK);
-  _chime    = (uint8_t)EGPrefs::getUInt("tick", K_CHIME);
+void AudioTick::onPrefsLoaded() {
+  _enabled  = corium::Prefs::getBool("tick", EG_K_ENABLE);
+  _volume   = (uint8_t)corium::Prefs::getUInt("tick", EG_K_VOLUME);
+  _freq_hz  = (uint16_t)corium::Prefs::getUInt("tick", EG_K_FREQ);
+  _decay_ms = (uint8_t)corium::Prefs::getUInt("tick", K_DECAY);
+  _engine   = (uint8_t)corium::Prefs::getUInt("tick", K_ENGINE);
+  _peak     = (uint8_t)corium::Prefs::getUInt("tick", K_PEAK);
+  _chime    = (uint8_t)corium::Prefs::getUInt("tick", K_CHIME);
 #ifndef AUDIO_TICK_PINS_BLOCKED
-  _bclk = (uint8_t)EGPrefs::getUInt("tick", K_BCLK);
-  _ws   = (uint8_t)EGPrefs::getUInt("tick", K_WS);
-  _dout = (uint8_t)EGPrefs::getUInt("tick", K_DOUT);
+  _bclk = (uint8_t)corium::Prefs::getUInt("tick", K_BCLK);
+  _ws   = (uint8_t)corium::Prefs::getUInt("tick", K_WS);
+  _dout = (uint8_t)corium::Prefs::getUInt("tick", K_DOUT);
 #endif
 }
 
 static bool claim_i2s_pins(uint8_t bclk, uint8_t ws, uint8_t dout) {
   const uint8_t pins[3] = {bclk, ws, dout};
   for (uint8_t p : pins) {
-    if (const char* why = PinSafety::claim_output(p, PSTR("AudioI2S"))) {
-      Log::console(PSTR("Tick: I2S pin=%u unsafe (%s)"), (unsigned)p, why);
+    if (const char* why = corium::PinSafety::claimOutput(p, PSTR("AudioI2S"))) {
+      corium::Log::console(PSTR("Tick: I2S pin=%u unsafe (%s)"), (unsigned)p, why);
       return false;
     }
   }
   return true;
 }
 
+static void audiotick_click(uint32_t) { audiotick.notifyClick(corium::fastMillis()); }
+
 void AudioTick::begin() {
+  gcounter.on_click(audiotick_click);
+  gcounter.on_rx_click(audiotick_click);
   if (_i2s_up) return;
   if (!_enabled) return;
   if (!claim_i2s_pins(_bclk, _ws, _dout)) return;
@@ -238,7 +262,7 @@ void AudioTick::begin() {
     .fixed_mclk = 0,
   };
   if (i2s_driver_install(I2S_NUM_0, &cfg, 0, NULL) != ESP_OK) {
-    Log::console(PSTR("Tick: i2s_driver_install failed"));
+    corium::Log::console(PSTR("Tick: i2s_driver_install failed"));
     return;
   }
   i2s_pin_config_t pins = {
@@ -249,7 +273,7 @@ void AudioTick::begin() {
     .data_in_num  = I2S_PIN_NO_CHANGE,
   };
   if (i2s_set_pin(I2S_NUM_0, &pins) != ESP_OK) {
-    Log::console(PSTR("Tick: i2s_set_pin failed"));
+    corium::Log::console(PSTR("Tick: i2s_set_pin failed"));
     i2s_driver_uninstall(I2S_NUM_0);
     return;
   }
@@ -257,51 +281,51 @@ void AudioTick::begin() {
   _i2s_up = true;
   audio_worker_start();
   mute_btn_start();
-  Log::console(PSTR("Tick: I2S ready (BCLK=%u WS=%u DOUT=%u)"),
-               (unsigned)_bclk, (unsigned)_ws, (unsigned)_dout);
+  corium::Log::console(PSTR("Tick: I2S ready (BCLK=%u WS=%u DOUT=%u)"),
+                       (unsigned)_bclk, (unsigned)_ws, (unsigned)_dout);
   playBootChime();
 }
 
-void AudioTick::toggleMute() {
-  _muted = !_muted;
-  Log::console(_muted ? PSTR("Tick: muted") : PSTR("Tick: unmuted"));
+// Only runs when posted, by the mute button
+void AudioTick::loop(unsigned long) {
+  bool m = muted();
+  if (m == _muted_logged) return;
+  _muted_logged = m;
+  corium::Log::console(m ? PSTR("Tick: muted") : PSTR("Tick: unmuted"));
 }
 
 // 33 Hz cap, burst of 8
 void AudioTick::notifyClick(unsigned long now_ms) {
-  if (!_enabled || !_i2s_up || _volume == 0 || _muted) return;
-  if (s_nm_busy) return;
+  if (!_enabled || !_i2s_up || _volume == 0 || muted()) return;
+  if (s_owned) return;
   constexpr uint32_t TOKEN_REFILL_MS = 30;
   constexpr uint8_t  TOKEN_MAX       = 8;
-  unsigned long elapsed = now_ms - _last_token_ms;
-  if (elapsed >= TOKEN_REFILL_MS) {
-    uint32_t gained = elapsed / TOKEN_REFILL_MS;
-    if (_tokens + gained > TOKEN_MAX) _tokens = TOKEN_MAX;
-    else _tokens += (uint8_t)gained;
-    _last_token_ms += gained * TOKEN_REFILL_MS;
-  }
-  if (_tokens == 0) return;
-  _tokens--;
-  _last_emit_ms = now_ms;
-  static const AudioCmd CLICK = { AC_CLICK, 255 };   // pref engine
+  if (!takeToken(now_ms, _last_token_ms, _tokens, TOKEN_REFILL_MS, TOKEN_MAX)) return;
+  static const AudioCmd CLICK = { AC_CLICK, 255 };   // 255 = engine from prefs
   audio_enqueue(CLICK);
 }
 
-void AudioTick::playBootChime() { play_chime_now(_chime); }
+// Plays on the aud task so setup carries on
+void AudioTick::playBootChime() {
+  AudioCmd cmd{};
+  cmd.type = AC_CHIME;
+  cmd.i1 = _chime;
+  audio_enqueue(cmd);
+}
 
-// false = 400 sent
+// false if a 400 was already sent
 static bool tick_cmd_from(EGHttpRequest& req, EGHttpResponse& res, AudioCmd* cmd,
                           int32_t chime) {
-  const char* k = req.arg(F("click"));
-  if (k && k[0]) {
+  const char* click = req.arg(F("click"));
+  if (click && click[0]) {
     int32_t eng;
-    if (!parse_i32(k, &eng) || eng < 0 || eng > 1) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("0..1")); return false; }
+    if (!parseI32(click, &eng) || eng < 0 || eng > 1) { res.send(400, FPSTR(HTTP_CT_PLAIN), F("0..1")); return false; }
     cmd->type = AC_CLICK; cmd->i1 = (uint8_t)eng;
     return true;
   }
   const char* c = req.arg(F("c"));
   int32_t which = chime;
-  if (c && c[0] && !parse_i32(c, &which)) which = 0;
+  if (c && c[0] && !parseI32(c, &which)) which = 0;
   if (which < 0 || which > 9) which = 0;
   cmd->type = AC_CHIME; cmd->i1 = (uint8_t)which;
   return true;
@@ -313,8 +337,9 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
       if (!audiotick._i2s_up) { res.send(503, FPSTR(HTTP_CT_PLAIN), F("audio not ready")); return; }
       AudioCmd cmd{};
       if (!tick_cmd_from(req, res, &cmd, audiotick._chime)) return;
-      if (audio_enqueue(cmd)) res.send(200, FPSTR(HTTP_CT_PLAIN), F("queued"));
-      else                    res.send(503, FPSTR(HTTP_CT_PLAIN), F("queue full"));
+      cmd.web = true;
+      if (audio_enqueue(cmd)) res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(AT_QUEUED));
+      else                    res.send(503, FPSTR(HTTP_CT_PLAIN), FPSTR(AT_QFULL));
     });
   http.on(F("/numbers"), EGHttpRequest::GET,
     [](EGHttpRequest& req, EGHttpResponse& res, void*) {
@@ -327,16 +352,32 @@ void AudioTick::registerRoutes(EGHttpServer& http) {
       out[PAD_LEN] = '\0';
       AudioCmd cmd{};
       cmd.type = AC_NUMBERS;
-      if (!audio_enqueue(cmd)) { res.send(503, FPSTR(HTTP_CT_PLAIN), F("queue full")); return; }
+      cmd.web = true;
+      if (!audio_enqueue(cmd)) { res.send(503, FPSTR(HTTP_CT_PLAIN), FPSTR(AT_QFULL)); return; }
       res.send(200, FPSTR(HTTP_CT_PLAIN), out);
     });
+}
+
+// Silence, kept off the aud task stack
+static const int16_t GAP_50MS[1100] = {0};
+constexpr uint16_t GAP_LEN = sizeof(GAP_50MS) / sizeof(int16_t);
+
+// Only from the aud task
+void audio_silence(uint16_t ms) {
+  uint32_t left = ms_to_samples(ms);
+  while (left > 0) {
+    const uint16_t n = (left > GAP_LEN) ? GAP_LEN : (uint16_t)left;
+    size_t written = 0;
+    i2s_write(I2S_NUM_0, GAP_50MS, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
+    left -= n;
+  }
 }
 
 void AudioTick::play_chime_now(uint8_t c) {
   if (!_i2s_up || c == 0) return;
   if (c == 1) {
-    uint32_t r = ESP.getCycleCount() ^ (uint32_t)DeviceInfo::hwid();
-    r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+    uint32_t r = corium::DeviceInfo::cycles() ^ (uint32_t)corium::DeviceInfo::hwId();
+    r = xorshift32(r);
     c = 2 + (uint8_t)(r % 8);
   }
   switch (c) {
@@ -349,16 +390,14 @@ void AudioTick::play_chime_now(uint8_t c) {
     case 8:          chimeItemGet();       break;
     case 9:          chimeMorseCallsign(); break;
   }
-  // else the amp soft-stop eats the next clicks
-  constexpr uint16_t SIL_CHUNK = 256;
-  int16_t silence[SIL_CHUNK] = {0};
-  uint32_t remaining = 300 * AUDIO_TICK_SAMPLE_RATE / 1000;
-  while (remaining > 0) {
-    const uint16_t n = (remaining > SIL_CHUNK) ? SIL_CHUNK : (uint16_t)remaining;
-    size_t written = 0;
-    i2s_write(I2S_NUM_0, silence, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
-    remaining -= n;
-  }
+  // Pad with silence, else the amp soft-stop eats the next clicks
+  audio_silence(300);
+}
+
+static inline float envelope(uint32_t pos, uint32_t total, uint32_t attack, uint32_t release) {
+  if (pos < attack)          return (float)pos / (float)attack;
+  if (pos > total - release) return (float)(total - pos) / (float)release;
+  return 1.0f;
 }
 
 // 256-sample chunks, keeps stack bounded
@@ -368,7 +407,7 @@ void AudioTick::playMelodyNote(uint16_t freq_hz, uint16_t ms,
   const float inv_fs   = 1.0f / (float)AUDIO_TICK_SAMPLE_RATE;
   const float amp      = (_volume / 100.0f) * (square ? 7000.0f : 11000.0f);
   const float w        = TWO_PI * (float)freq_hz * inv_fs;
-  const uint32_t total = (uint32_t)ms * AUDIO_TICK_SAMPLE_RATE / 1000;
+  const uint32_t total = ms_to_samples(ms);
   const uint32_t attack  = 200;
   const uint32_t release = (total > 1600) ? 800 : total / 4;
   float phase = 0.0f;
@@ -377,10 +416,7 @@ void AudioTick::playMelodyNote(uint16_t freq_hz, uint16_t ms,
     const uint16_t n = (total - out > CHUNK) ? CHUNK : (uint16_t)(total - out);
     for (uint16_t i = 0; i < n; i++) {
       const uint32_t pos = out + i;
-      float env;
-      if (pos < attack)                 env = (float)pos / (float)attack;
-      else if (pos > total - release)   env = (float)(total - pos) / (float)release;
-      else                              env = 1.0f;
+      const float env = envelope(pos, total, attack, release);
       phase += w;
       float s = sinf(phase);
       if (square) s = (s >= 0.0f) ? 1.0f : -1.0f;
@@ -390,16 +426,7 @@ void AudioTick::playMelodyNote(uint16_t freq_hz, uint16_t ms,
     i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 50 / portTICK_PERIOD_MS);
     out += n;
   }
-  if (gap_ms > 0) {
-    for (uint16_t i = 0; i < CHUNK; i++) buf[i] = 0;
-    uint32_t remaining = (uint32_t)gap_ms * AUDIO_TICK_SAMPLE_RATE / 1000;
-    while (remaining > 0) {
-      const uint16_t n = (remaining > CHUNK) ? CHUNK : (uint16_t)remaining;
-      size_t written = 0;
-      i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 200 / portTICK_PERIOD_MS);
-      remaining -= n;
-    }
-  }
+  audio_silence(gap_ms);
 }
 
 void AudioTick::chimeThreeBeeps() {
@@ -436,7 +463,7 @@ void AudioTick::chimeDtmf() {
   constexpr uint16_t CHUNK = 256;
   const float inv_fs = 1.0f / (float)AUDIO_TICK_SAMPLE_RATE;
   const float amp    = (_volume / 100.0f) * 14000.0f;
-  const uint32_t total  = 100 * AUDIO_TICK_SAMPLE_RATE / 1000;   // 100 ms / digit
+  const uint32_t total  = ms_to_samples(100);   // 100 ms / digit
   const uint32_t attack = 200, release = 800;
   int16_t buf[CHUNK];
   for (uint8_t d = 0; d < 4; d++) {
@@ -447,10 +474,7 @@ void AudioTick::chimeDtmf() {
       const uint16_t n = (total - out > CHUNK) ? CHUNK : (uint16_t)(total - out);
       for (uint16_t i = 0; i < n; i++) {
         const uint32_t pos = out + i;
-        float env;
-        if (pos < attack)                 env = (float)pos / (float)attack;
-        else if (pos > total - release)   env = (float)(total - pos) / (float)release;
-        else                              env = 1.0f;
+        const float env = envelope(pos, total, attack, release);
         p1 += w1; p2 += w2;
         buf[i] = (int16_t)((sinf(p1) + sinf(p2)) * env * amp);
       }
@@ -458,9 +482,7 @@ void AudioTick::chimeDtmf() {
       i2s_write(I2S_NUM_0, buf, n * sizeof(int16_t), &written, 50 / portTICK_PERIOD_MS);
       out += n;
     }
-    static const int16_t gap[1100] = {0};   // 50 ms
-    size_t written = 0;
-    i2s_write(I2S_NUM_0, gap, sizeof(gap), &written, 80 / portTICK_PERIOD_MS);
+    audio_silence(50);
   }
 }
 
@@ -484,13 +506,12 @@ void AudioTick::chimeItemGet() {
 }
 
 void AudioTick::chimeMorseCallsign() {
-  constexpr uint16_t U       = 70;
-  constexpr uint16_t F       = 700;
-  constexpr uint16_t ELE_GAP = U;
-  constexpr uint16_t DIG_GAP = U * 3;
-  uint64_t mac = DeviceInfo::hwid();
-  uint32_t r = (uint32_t)(mac ^ (mac >> 32));
-  r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+  constexpr uint16_t UNIT_MS = 70;
+  constexpr uint16_t TONE_HZ = 700;
+  constexpr uint16_t ELE_GAP = UNIT_MS;
+  constexpr uint16_t DIG_GAP = UNIT_MS * 3;
+  uint64_t mac = corium::DeviceInfo::hwId();
+  uint32_t r = xorshift32(fold32(mac));
   for (uint8_t i = 0; i < 3; i++) {
     uint8_t d = (uint8_t)(r % 10);
     r /= 10;
@@ -498,13 +519,13 @@ void AudioTick::chimeMorseCallsign() {
     const uint8_t* code = MORSE_DIGIT[d];
     for (uint8_t e = 0; e < 5; e++) {
       uint16_t gap = (e == 4) ? DIG_GAP : ELE_GAP;
-      playMelodyNote(F, code[e] ? U * 3 : U, false, gap);
+      playMelodyNote(TONE_HZ, code[e] ? UNIT_MS * 3 : UNIT_MS, false, gap);
     }
   }
 }
 
 void AudioTick::numbersPad(uint8_t* out, size_t n) {
-  uint64_t h = DeviceInfo::hwid();
+  uint64_t h = corium::DeviceInfo::hwId();
   for (size_t i = 0; i < n; i++) {
     h = h * 6364136223846793005ULL + 1442695040888963407ULL;
     out[i] = (uint8_t)((h >> 32) % 10);
@@ -526,36 +547,32 @@ void AudioTick::chimeNumbersStation() {
   uint8_t msg[10];
   numbers_payload(msg);
   chimeFolkMelody();
-  voice.silence(800);
+  speak(AC_SILENCE, 0, 800);
   for (uint8_t grp = 0; grp < 2; grp++) {
     for (uint8_t rep = 0; rep < 2; rep++) {
       for (uint8_t d = 0; d < 5; d++) {
         const uint8_t idx = grp * 5 + d;
         const bool last = (d == 4);
-        voice.speakDigit(msg[idx], last);
-        voice.silence(last ? 600 : 200);
+        speak(AC_DIGIT, msg[idx], last);
+        speak(AC_SILENCE, 0, last ? 600 : 200);
       }
-      if (rep == 0) voice.silence(1200);
+      if (rep == 0) speak(AC_SILENCE, 0, 1200);
     }
-    if (grp == 0) voice.silence(2200);
+    if (grp == 0) speak(AC_SILENCE, 0, 2200);
   }
-  voice.silence(1000);
+  speak(AC_SILENCE, 0, 1000);
   chimeFolkMelody();
 }
 
 void AudioTick::chimeSputnik() {
   for (uint8_t k = 0; k < 3; k++) {
     playMelodyNote(1000, 280);
-    int16_t gap[1100] = {0};   // 50 ms
-    size_t written = 0;
-    for (uint8_t g = 0; g < 5; g++) {
-      i2s_write(I2S_NUM_0, gap, sizeof(gap), &written, 80 / portTICK_PERIOD_MS);
-    }
+    audio_silence(250);
   }
 }
 
-void AudioTick::playClick(uint8_t engine_override) {
-  const uint8_t e = (engine_override <= 1) ? engine_override : _engine;
+void AudioTick::playClick(uint8_t engine) {
+  const uint8_t e = (engine <= 1) ? engine : _engine;
   switch (e) {
     case 0: default: playClickPool();  break;
     case 1:          playClickChirp(); break;
@@ -563,75 +580,19 @@ void AudioTick::playClick(uint8_t engine_override) {
 }
 
 static float chip_voice_factor() {
-  static const float factor = [] {
-    uint64_t mac = DeviceInfo::hwid();
-    uint8_t mixed = (uint8_t)(mac ^ (mac >> 8) ^ (mac >> 16) ^ (mac >> 24)
-                            ^ (mac >> 32) ^ (mac >> 40));
-    return 1.0f + ((int32_t)mixed - 128) * (0.03f / 128.0f);
-  }();
-  return factor;
+  static const float s_factor = chip_click_pitch(corium::DeviceInfo::hwId());
+  return s_factor;
 }
 
 void AudioTick::playClickChirp() {
-  uint32_t r = ESP.getCycleCount();
-  r ^= r << 13; r ^= r >> 17; r ^= r << 5;
-  const float j_freq  = 1.0f + (((int32_t)(r        & 0xFF) - 128) * (0.03f/128.0f));
-  const float j_decay = 1.0f + (((int32_t)((r >> 8) & 0xFF) - 128) * (0.04f/128.0f));
-  uint32_t nr = r ^ 0xCAFEBABE;
-
-  constexpr uint16_t N           = 1024;
-  constexpr uint16_t attack_ramp = 7;
-  constexpr uint16_t exit_ramp   = 16;
-  constexpr float    asym        = 0.8f;
-  constexpr float    f2_amp      = 0.35f;
-  const float        peak_ceil   = (float)_peak / 100.0f;
-  constexpr float    DC_R        = 0.997f;       // DC blocker, ~50 Hz
-  constexpr float    NOISE_MIX   = 0.10f;
-  int16_t buf[N];
-  const float fs     = (float)AUDIO_TICK_SAMPLE_RATE;
-  const float inv_fs = 1.0f / fs;
-  const float amp    = (_volume / 100.0f) * 32000.0f;
-  const float tau    = (float)_decay_ms / 1000.0f * j_decay;
-  const float f_lo   = (float)_freq_hz * j_freq * chip_voice_factor();
-  const float f_hi   = f_lo * 2.0f;
-  const float w_f2   = TWO_PI * f_lo * 0.55f * inv_fs;
-  const float env_dec   = expf(-inv_fs / tau);
-  const float chirp_dec = expf(-inv_fs / 0.0005f);
-  const float asym_dec  = expf(-inv_fs / 0.0006f);
-  const float f2_dec    = expf(-inv_fs / 0.004f);
-  constexpr uint16_t sustain_n = 130;   // ~6 ms
-  uint16_t cutoff = sustain_n + (uint16_t)(6.0f * tau * fs);
-  if (cutoff > N) cutoff = N;   // exit ramp still runs
-  float env = 1.0f, chirp_env = 1.0f, asym_env = 1.0f, f2_env = 1.0f;
-  float phase = 0.0f, f2_phase = 0.0f;
-  float dc_x = 0.0f, dc_y = 0.0f;
-  for (uint16_t i = 0; i < N; i++) {
-    if (i >= cutoff) { buf[i] = 0; continue; }
-    const float f_inst = f_lo + (f_hi - f_lo) * chirp_env;
-    phase += TWO_PI * f_inst * inv_fs;
-    float eff_env = env;
-    if (i < attack_ramp)      eff_env *= (float)i / (float)attack_ramp;
-    const uint16_t to_end = cutoff - i;
-    if (to_end <= exit_ramp)  eff_env *= (float)to_end / (float)exit_ramp;
-    nr ^= nr << 13; nr ^= nr >> 17; nr ^= nr << 5;
-    const float n = ((int32_t)(nr & 0xFFFF) - 32768) * (1.0f/32768.0f);
-    float sample = (sinf(phase) * (1.0f - NOISE_MIX) + n * NOISE_MIX) * eff_env
-                   - asym * asym_env;
-    f2_phase += w_f2;
-    sample += f2_amp * sinf(f2_phase) * f2_env;
-    const float y = sample - dc_x + DC_R * dc_y;
-    dc_x = sample; dc_y = y;
-    int32_t v = (int32_t)(y * amp * peak_ceil);
-    if (v >  32767) v =  32767;
-    if (v < -32768) v = -32768;
-    buf[i] = (int16_t)v;
-    if (i >= sustain_n) env *= env_dec;
-    chirp_env *= chirp_dec;
-    asym_env  *= asym_dec;
-    f2_env    *= f2_dec;
-  }
-  size_t written = 0;
-  i2s_write(I2S_NUM_0, buf, sizeof(buf), &written, 10 / portTICK_PERIOD_MS);
+  uint32_t r = corium::DeviceInfo::cycles();
+  r = xorshift32(r);
+  const float j_freq = jitter_factor((uint8_t)r, 0.03f);
+  const float j_decay = jitter_factor((uint8_t)(r >> 8), 0.04f);
+  const float amp  = (_volume / 100.0f) * 32000.0f;
+  const float tau  = (float)_decay_ms / 1000.0f * j_decay;
+  const float f_lo = (float)_freq_hz * j_freq * chip_voice_factor();
+  synthClick(0.8f, 0.35f, amp, tau, f_lo, r ^ 0xCAFEBABE);
 }
 
 void AudioTick::playClickPool() {
@@ -642,66 +603,73 @@ void AudioTick::playClickPool() {
     { 0.85f, 0.35f },
     { 1.10f, 0.30f },
   };
-  uint32_t r = ESP.getCycleCount();
-  r ^= r << 13; r ^= r >> 17; r ^= r << 5;
+  uint32_t r = corium::DeviceInfo::cycles();
+  r = xorshift32(r);
   const uint8_t which   = (r >> 24) & 3;
-  const float   j_vol   = 1.0f + (((int32_t)(r        & 0xFF) - 128) * (0.05f/128.0f));
-  const float   j_freq  = 1.0f + (((int32_t)((r >> 8) & 0xFF) - 128) * (0.03f/128.0f));
-  const float   j_decay = 1.0f + (((int32_t)((r >>16) & 0xFF) - 128) * (0.04f/128.0f));
-  uint32_t nr           = r ^ 0xDECADECA;
+  const float   j_vol   = jitter_factor((uint8_t)r,         0.05f);
+  const float   j_freq  = jitter_factor((uint8_t)(r >> 8),  0.03f);
+  const float   j_decay = jitter_factor((uint8_t)(r >> 16), 0.04f);
   const Variant v       = POOL[which];
+  const float amp  = (_volume / 100.0f) * 32000.0f * j_vol;
+  const float tau  = (float)_decay_ms / 1000.0f * j_decay;
+  const float f_lo = (float)_freq_hz * chip_voice_factor() * j_freq;
+  synthClick(v.asym, v.f2_amp, amp, tau, f_lo, r ^ 0xDECADECA);
+}
 
+// A chirp from 2x down to f_lo, a lower f2 body and a little noise.
+// f_lo comes from the caller, each engine multiplies it out in its own order
+void AudioTick::synthClick(float asym, float f2_amp, float amp, float tau, float f_lo,
+                           uint32_t nr) {
   constexpr uint16_t N           = 1024;
-  constexpr uint16_t attack_ramp = 7;
-  constexpr uint16_t exit_ramp   = 16;
+  constexpr uint16_t ATTACK_N    = 7;
+  constexpr uint16_t EXIT_N      = 16;
   const float        peak_ceil   = (float)_peak / 100.0f;
-  constexpr float    DC_R        = 0.997f;
+  constexpr float    DC_R        = 0.997f;       // DC blocker, ~50 Hz
   constexpr float    NOISE_MIX   = 0.10f;
-  int16_t buf[N];
+  constexpr uint16_t CHUNK       = 256;   // N must be a multiple
+  int16_t buf[CHUNK];
   const float fs     = (float)AUDIO_TICK_SAMPLE_RATE;
   const float inv_fs = 1.0f / fs;
-  const float amp    = (_volume / 100.0f) * 32000.0f * j_vol;
-  const float tau    = (float)_decay_ms / 1000.0f * j_decay;
-  const float f_lo   = (float)_freq_hz * chip_voice_factor() * j_freq;
   const float f_hi   = f_lo * 2.0f;
   const float w_f2   = TWO_PI * f_lo * 0.55f * inv_fs;
   const float env_dec   = expf(-inv_fs / tau);
   const float chirp_dec = expf(-inv_fs / 0.0005f);
   const float asym_dec  = expf(-inv_fs / 0.0006f);
   const float f2_dec    = expf(-inv_fs / 0.004f);
-  constexpr uint16_t sustain_n = 130;
-  uint16_t cutoff = sustain_n + (uint16_t)(6.0f * tau * fs);
-  if (cutoff > N) cutoff = N;
+  constexpr uint16_t SUSTAIN_N = 130;   // ~6 ms
+  uint16_t cutoff = SUSTAIN_N + (uint16_t)(6.0f * tau * fs);
+  if (cutoff > N) cutoff = N;   // exit ramp still runs
   float env = 1.0f, chirp_env = 1.0f, asym_env = 1.0f, f2_env = 1.0f;
   float phase = 0.0f, f2_phase = 0.0f;
   float dc_x = 0.0f, dc_y = 0.0f;
-  for (uint16_t i = 0; i < N; i++) {
-    if (i >= cutoff) { buf[i] = 0; continue; }
-    const float f_inst = f_lo + (f_hi - f_lo) * chirp_env;
-    phase += TWO_PI * f_inst * inv_fs;
-    float eff_env = env;
-    if (i < attack_ramp)      eff_env *= (float)i / (float)attack_ramp;
-    const uint16_t to_end = cutoff - i;
-    if (to_end <= exit_ramp)  eff_env *= (float)to_end / (float)exit_ramp;
-    nr ^= nr << 13; nr ^= nr >> 17; nr ^= nr << 5;
-    const float n = ((int32_t)(nr & 0xFFFF) - 32768) * (1.0f/32768.0f);
-    float sample = (sinf(phase) * (1.0f - NOISE_MIX) + n * NOISE_MIX) * eff_env
-                   - v.asym * asym_env;
-    f2_phase += w_f2;
-    sample += v.f2_amp * sinf(f2_phase) * f2_env;
-    const float y = sample - dc_x + DC_R * dc_y;
-    dc_x = sample; dc_y = y;
-    int32_t vi = (int32_t)(y * amp * peak_ceil);
-    if (vi >  32767) vi =  32767;
-    if (vi < -32768) vi = -32768;
-    buf[i] = (int16_t)vi;
-    if (i >= sustain_n) env *= env_dec;
-    chirp_env *= chirp_dec;
-    asym_env  *= asym_dec;
-    f2_env    *= f2_dec;
+  for (uint16_t out = 0; out < N; out += CHUNK) {
+    for (uint16_t k = 0; k < CHUNK; k++) {
+      const uint16_t i = out + k;
+      if (i >= cutoff) { buf[k] = 0; continue; }
+      const float f_inst = f_lo + (f_hi - f_lo) * chirp_env;
+      phase += TWO_PI * f_inst * inv_fs;
+      float eff_env = env;
+      if (i < ATTACK_N)         eff_env *= (float)i / (float)ATTACK_N;
+      const uint16_t to_end = cutoff - i;
+      if (to_end <= EXIT_N)     eff_env *= (float)to_end / (float)EXIT_N;
+      nr = xorshift32(nr);
+      const float n = ((int32_t)(nr & 0xFFFF) - 32768) * (1.0f/32768.0f);
+      float sample = (sinf(phase) * (1.0f - NOISE_MIX) + n * NOISE_MIX) * eff_env
+                     - asym * asym_env;
+      f2_phase += w_f2;
+      sample += f2_amp * sinf(f2_phase) * f2_env;
+      const float y = sample - dc_x + DC_R * dc_y;
+      dc_x = sample; dc_y = y;
+      buf[k] = sat16((int32_t)(y * amp * peak_ceil));
+      if (i >= SUSTAIN_N) env *= env_dec;
+      chirp_env *= chirp_dec;
+      asym_env  *= asym_dec;
+      f2_env    *= f2_dec;
+    }
+    size_t written = 0;
+    i2s_write(I2S_NUM_0, buf, sizeof(buf), &written, 10 / portTICK_PERIOD_MS);
+    if (written < sizeof(buf)) break;   // timed out, rest dropped
   }
-  size_t written = 0;
-  i2s_write(I2S_NUM_0, buf, sizeof(buf), &written, 10 / portTICK_PERIOD_MS);
 }
 
 #endif

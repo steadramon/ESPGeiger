@@ -7,18 +7,12 @@ VERSION="$1"
 # name is ESPGeiger_webinstall.0.12.0.zip).
 VERSION_CLEAN="${VERSION#v}"
 
-# ESP32 envs ship the bootloader, partition table, boot_app0 and app
-# separately so the web installer can target only those offsets, leaving
-# the NVS partition (saved WiFi creds) at 0x9000 untouched on upgrades.
-# Per-env offsets.json is the source of truth; webinstaller assembles its
-# manifest.json from it.
+# esp32 parts split so an upgrade leaves NVS (wifi) at 0x9000, offsets.json per env
 echo "building ESP32 webinstall payload"
 python3 scripts/build_webinstall_payload.py "$VERSION_CLEAN"
 
 echo "extracting advanced test firmware bins to bundled zip"
-# Plain *_test envs (esp32_test, esp8266_test etc.) stay as standalone release
-# bins. The dev-oriented variants (testpulse / testpulseint / testserial) get
-# bundled into one zip to keep the release page tidy.
+# testpulse / testpulseint / testserial into one zip, plain *_test stay
 mkdir -p test_advanced
 for env_dir in .pio/build/*_testpulse .pio/build/*_testpulseint .pio/build/*_testserial; do
   [ -d "$env_dir" ] || continue

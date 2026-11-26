@@ -34,6 +34,8 @@ The Cajoe GC-ESP32 has a inbuilt ESP32 to which ESPGeiger can be installed. The 
 
 - Follow the instructions for [installing ESPGeiger](/install/webinstall) using the web installer at [https://install.espgeiger.com](https://install.espgeiger.com)
 
+The `esp32_cajoe_iotgm` build counts on GPIO 26, fixed, with the ESP32's PCNT counter. Leave **PCNT pull** on None (the default): a pull-up can hold the IOT-GM v1.1's output high so no pulse counts. See [PCNT](/hardware/esphardware#pcnt).
+
 ## User Images
 
 ### CAJOE GC-ESP32

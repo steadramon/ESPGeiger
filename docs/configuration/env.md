@@ -8,7 +8,7 @@ parent: Configuration
 
 # Environment sensor
 
-ESPGeiger reads temperature, humidity and pressure off an I2C sensor wired to the device. Plug a supported one in, power up and it's picked up automatically - nothing to flash, nothing to configure. The readings land on the `/status` page under the radiation numbers and go out on every channel (MQTT, Webhook, WebAPI, UDP, Serial templates, Thingspeak).
+ESPGeiger reads temperature, humidity and pressure off an I2C sensor wired to the device. Plug a supported one in, power up and it's picked up automatically - nothing to flash, nothing to configure. The readings land on the `/status` page under the radiation numbers and go out on every channel (MQTT, Webhook, WebAPI, UDP, Serial templates, ThingSpeak).
 
 ## Supported sensors
 
@@ -30,12 +30,12 @@ Connect SDA, SCL, VCC (3.3 V), GND. Default pins:
 
 | Platform | SDA | SCL |
 |---|---|---|
-| ESP8266 | 4 | 5 |
-| ESP32 (classic) | 21 | 22 |
-| ESP32-S2 / S3 | 8 | 9 |
-| ESP32-C3 / C6 | 6 | 7 |
+| ESP8266, ESP32, ESP32-S3 | 4 | 5 |
+| ESP32-C3 | 5 | 6 |
+| ESP32-S2 | 8 | 9 |
+| Kits | fixed, see [OLED](/hardware/oled) | |
 
-ESPGeiger uses a single I2C bus, shared with the OLED. OLED builds default to the OLED's pins. Change the pins in the **I2C Bus** section of the [Config page](/configuration). A reboot is required to apply pin changes.
+ESPGeiger uses a single I2C bus, shared with the OLED. OLED builds default to the OLED's pins. Change the pins in the **I2C Bus** section of the [Config page](/configuration). A restart is required to apply pin changes.
 
 ## Settings
 
@@ -49,7 +49,7 @@ ESPGeiger uses a single I2C bus, shared with the OLED. OLED builds default to th
 
 <!-- /gen -->
 
-`env.unit` only affects what is shown on the local `/status` page and Serial templates. All outputs (MQTT, Webhook, WebAPI, UDP, Thingspeak) always publish in canonical units (°C, %RH, hPa) so consumers can convert if they want.
+`env.unit` only affects what is shown on the local `/status` page and Serial templates. All outputs (MQTT, Webhook, WebAPI, UDP, ThingSpeak) always publish in canonical units (°C, %RH, hPa) so consumers can convert if they want.
 
 ## Combo modules
 
@@ -64,7 +64,7 @@ When a sensor is present, the firmware adds the relevant fields to each output c
 * **Webhook**: JSON body gains `t` / `h` / `p`.
 * **WebAPI**: MsgPack payload gains `t` / `h` / `p`.
 * **UDP / OSC**: new `/espg/<id>/env` schema `,fff` (temp, humidity, pressure) every 60 s.
-* **Thingspeak**: maps temp / humidity / pressure to `field5` / `field6` / `field7`. Configure those fields in your Thingspeak channel UI.
+* **ThingSpeak**: maps temp / humidity / pressure to `field5` / `field6` / `field7`. Configure those fields in your ThingSpeak channel UI.
 * **Serial template** (`sout.format=2`): variables `{t}` `{h}` `{p}` available for substitution.
 
 Historical trends are not stored on the device - if you want a 24-hour chart, point your MQTT broker at Home Assistant, Grafana, or any other dashboard tool.
@@ -75,7 +75,7 @@ Visit `/vars.json` on the device to see the current rendered value of every vari
 
 ## Troubleshooting
 
-* **Env row missing on `/status`.** No sensor was found at boot. Check 3.3 V supply, pull-up resistors (4.7 kΩ typical), SDA/SCL wiring and the `env.sda` / `env.scl` pref values. Enable debug logging to see the probe attempt in the console.
+* **Env row missing on `/status`.** No sensor was found at boot. Check 3.3 V supply, pull-up resistors (4.7 kΩ typical), SDA/SCL wiring and the `i2c.sda` / `i2c.scl` settings (I2C Bus on the Config page). The boot log says `Env: <chip> detected` when a sensor is found; when none is found nothing is logged.
 * **Humidity missing from the row.** You probably have a BMP280, not a BME280. The two parts look similar on a board but only BME280 has the humidity sensor. The boot log line `Env: <chip> detected` tells you which one you have (serial console, or the Console panel on the `/status` page).
 * **Pressure missing.** You probably have an AHT-only module without the paired BMP280. Add a BMP280 on the same I2C bus, or accept that pressure is not available.
 * **Wrong temperature just after boot.** The first reading sets the baseline. Allow 30 seconds for the smoothed value to settle.

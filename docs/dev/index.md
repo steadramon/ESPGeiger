@@ -10,6 +10,8 @@ nav_order: 50
 
 Pull requests are welcomed! Please [visit GitHub](https://github.com/steadramon/ESPGeiger) if you would like to contribute to the project.
 
+Host tests: `pio test -c test.ini -e native`. See `test/README.md`.
+
 ## Pulse Testing
 
 ![PWM module](img/pwmmodule.jpg)
@@ -50,12 +52,12 @@ In these test build modes, you can connect the `TXPIN` (transmit pin) of one ESP
 
 ### TestPulse → esp8266_pulse cross-device setup
 
-To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX pin (default GPIO 12 on ESP8266, configurable via the Input preferences) to an `esp8266_pulse` device's RX pin (default GPIO 13) and share GND between the two boards. Both devices then post to the WebAPI independently and their CPM readings should agree within Poisson noise.
+To sanity-check the end-to-end count pipeline, wire a `*_testpulse` device's TX pin (default GPIO 12 on ESP8266, configurable via the Input preferences) to an `esp8266_pulse` device's RX pin (default GPIO 13) and share GND between the two boards. Only the `esp8266_pulse` device posts (test builds never upload); the two CPM readings should agree within Poisson noise.
 
 Notes:
 
 - Idle line level is LOW; each simulated count is a ~500µs HIGH pulse. The receiver counts on the falling edge at pulse end. This is inverted-polarity from a real Geiger tube (idles HIGH, pulses LOW) but the count is the same.
-- `GEIGER_COUNT_TXPULSE` is enabled in the default builds, so the transmitting device also counts its own outgoing pulses internally. On a bridged TX↔RX of the *same* device this would double-count except that the receiver-side `debounce` filter (default 200µs) drops the duplicate edge that arrives immediately after.
+- `GEIGER_COUNT_TXPULSE` is set on `esp8266_testpulse`, `esp32_testpulseint` and the ESPGeiger Lite/Log TX test builds, so the transmitting device also counts its own outgoing pulses internally. On a bridged TX-RX of the *same* device this would double-count except that the receiver-side `debounce` filter (default 200µs) drops the duplicate edge that arrives immediately after.
 
 ### Pushing the rate ceiling
 
@@ -66,9 +68,9 @@ Default settings give a practical ceiling of roughly 120k CPM on both sides:
 
 To stress-test beyond 120k CPM:
 
-1. Lower `pulse_width_us` on the transmitting device (e.g. 100µs → ~600k CPM ceiling).
+1. Lower `pulse_width_us` on the transmitting device (e.g. 100µs gives a ~600k CPM ceiling).
 2. Lower `debounce` on the receiving device to match or beat the new pulse cadence.
-3. Optionally set `GEIGER_TEST_FIXEDCPM` or use the `--manual` CPM setter so you're testing a specific rate rather than the rotating 30/60/100/120.
+3. Optionally set `GEIGER_TEST_FIXEDCPM`, or pin the rate: `GET /cpm?v=250` (two decimals allowed) or the console command `target 250`. The rotation stops until the next restart, so you're testing a specific rate rather than the rotating 30/60/100/120.
 
 The `*_testpulseint` variant uses a deterministic PWM (not Poisson) and scales cleanly to ~500k CPM without these knobs - useful when the goal is "does the counter keep up?" rather than "does the statistics look right?".
 
@@ -98,15 +100,15 @@ _Note_: No values are submitted to public services with Test builds.
 For diagnosing performance issues in the 1Hz tick callback, add `-DTICK_PROFILE` to `build_flags` in your environment config. Once per minute the device logs a breakdown of where time is spent:
 
 ```
-Tick profile: total=425 ctr=230 wifi=109 mods=128 lps=58733
-Mods max: mqtt=61 sdcard=25
+Tick profile: total=425 ctr=230 wifi=109 lps=58733 free=24120 min_free=22304 frag=12%
 ```
 
 - `total` - worst single tick duration in the last 60 seconds (us)
-- `ctr` - max time in `gcounter.secondticker()`
-- `wifi` - max time in WiFi tracking block
-- `mods` - max total time in `EGModuleRegistry::tick_all()`
-- `lps` - loop iterations per second (steady-state health indicator)
-- `Mods max:` - per-module worst-case `s_tick` duration, slowest first
+- `ctr` - max time in the app's once a second work (the counter tick)
+- `wifi` - max time in the WiFi tracking block
+- `lps` - loop iterations per second, averaged (steady-state health indicator)
+- `free` - free heap now (bytes)
+- `min_free` - lowest free heap seen in the last 60 seconds
+- `frag` - heap fragmentation
 
 Zero overhead when the flag is not defined - all instrumentation compiles out.

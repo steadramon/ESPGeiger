@@ -20,18 +20,34 @@
 
 #include <EGHttpServer.h>
 #include "HV.h"
+#include "App/AppKeys.h"
+#include "App/FeatureBits.h"
+#include "App/Health.h"
+#include "App/MeasureIds.h"
+#include "Counter/Counter.h"
+#include "Corium/Console/Console.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Counter/Counter.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Prefs/Prefs.h"
 #include "Corium/Util/MathUtil.h"
 #include "Corium/System/PinSafety.h"
 #include "Corium/Util/StringUtil.h"
 #include "Corium/Util/Words.h"
 #include "Corium/System/FastMillis.h"
 #include "Corium/System/Lifecycle.h"
-#ifdef ESP8266
+#include "Corium/System/RtcMap.h"
+#include "Corium/Platform/Chip.h"
+#if CORIUM_HAS_LEDC
+#include "hal/clk_gate_ll.h"
+#include "soc/ledc_struct.h"
+#endif
+#include "GeigerInput/GeigerInput.h"
+#if !GEIGER_IS_PULSE(GEIGER_TYPE)
+#error "ESPG_HV needs a pulse build"
+#endif
+#if CORIUM_HAS_TIMER1
 #ifndef EG_TIMER1
 #error "ESP8266 HV runs on EGTimer1 (EG_TIMER1)"
 #endif
@@ -39,90 +55,129 @@
 #error "ESPG_HV needs EG_TIMER1_PWM"
 #endif
 #include <EGTimer1.h>
+#include "Corium/System/AppHooks.h"
+// Stop the PWM on a crash, the NMI would keep driving the gate while the stack prints
+void corium::AppHooks::onCrash() { EGTimer1::pwm_stop(); }
 #endif
 #include "Corium/WebPortal/WebPortal.h"
 #include "HVJS_BUNDLE.gz.h"
+#include "App/Notice.h"
 
-EG_PSTR(K_DUTY,   "duty");
-EG_PSTR(K_OFFSET, "offset");
-EG_PSTR(K_TARGET, "target");
+CORIUM_PSTR(HV_NOTICE, "HV fault");
+CORIUM_PSTR(K_DUTY,   "duty");
+CORIUM_PSTR(K_OFFSET, "offset");
+CORIUM_PSTR(K_TARGET, "target");
 #ifdef ESPG_HV_ADC
-EG_PSTR(K_OV_V,   "ov_v");
-EG_PSTR(K_OV_S,   "ov_s");
-EG_PSTR(K_TRIM_MAX, "trim_max");
-EG_PSTR(K_TRIM_S, "trim_s");
-EG_PSTR(K_SETTLE_S, "settle_s");
-EG_PSTR(K_BOOT_S, "boot_s");
+CORIUM_PSTR(K_OV_V,   "ov_v");
+CORIUM_PSTR(K_OV_S,   "ov_s");
+CORIUM_PSTR(K_TRIM_MAX, "trim_max");
+CORIUM_PSTR(K_TRIM_S, "trim_s");
+CORIUM_PSTR(K_SETTLE_S, "settle_s");
+CORIUM_PSTR(K_BOOT_S, "boot_s");
+#if CORIUM_HAS_ADC_MV && !defined(ESPGEIGER_HW32) && !defined(HV_RATIO_MV)
+#define HV_RATIO_MV
+#endif
+#ifdef HV_RATIO_MV
+CORIUM_PSTR(K_RATIO_MV, "ratio_mv");
+#endif
 #endif
 
 
 HV hv;
-EG_REGISTER_MODULE(hv)
+CORIUM_REGISTER_FEATURE(hv, FEAT_HV)
 
-EG_PSTR(HW_L_FRQ, "PWM Frequency");
-EG_PSTR(HW_H_FRQ, "HV generator frequency (Hz)");
-EG_PSTR(HW_L_DTY, "PWM Duty");
-EG_PSTR(HW_H_DTY, "HV generator duty, out of " STR(HV_PWM_MAX));
+CORIUM_PSTR(HW_L_FRQ, "PWM frequency");
+CORIUM_PSTR(HW_H_FRQ, "HV generator frequency (Hz)");
+CORIUM_PSTR(HW_L_DTY, "PWM duty");
+CORIUM_PSTR(HW_H_DTY, "HV generator duty, out of " STR(HV_PWM_MAX));
 #ifdef ESPG_HV_ADC
-EG_PSTR(HW_L_RAT, "ADC VD Ratio");
-EG_PSTR(HW_H_RAT, "Voltage divider ratio (0 = ADC disabled)");
-EG_PSTR(HW_L_OFF, "ADC VD Offset");
-EG_PSTR(HW_H_OFF, "Voltage divider offset");
-EG_PSTR(HW_L_TGT, "HV target");
-EG_PSTR(HW_H_TGT, "Auto-trim duty toward this target voltage (0 = open loop)");
+CORIUM_PSTR(HW_L_RAT, "Divider ratio");
+CORIUM_PSTR(HW_H_RAT, "Voltage divider ratio, 0 = off");
+CORIUM_PSTR(HW_L_OFF, "Divider offset");
+CORIUM_PSTR(HW_H_OFF, "Voltage divider offset");
+CORIUM_PSTR(HW_L_TGT, "HV target");
+CORIUM_PSTR(HW_H_TGT, "Auto-trim duty toward this target voltage, 0 = open loop");
 #endif
 
-static const EGPref HW_PREF_ITEMS[] PROGMEM = {
-  {EG_K_FREQ,  HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, EGP_UINT, EGP_ADVANCED},
-  {K_DUTY,     HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, GEIGERHW_MAX_DUTY, 0, EGP_UINT, EGP_ADVANCED},
+static const corium::Pref HW_PREF_ITEMS[] PROGMEM = {
+  {EG_K_FREQ,  HW_L_FRQ, HW_H_FRQ, STR(GEIGERHW_FREQ), nullptr, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ, 0, corium::P_UINT, corium::P_ADVANCED},
+  {K_DUTY,     HW_L_DTY, HW_H_DTY, STR(GEIGERHW_DUTY), nullptr, 1, GEIGERHW_MAX_DUTY, 0, corium::P_UINT, corium::P_ADVANCED},
 #ifdef ESPG_HV_ADC
-  {EG_K_RATIO, HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    50000, 0, EGP_INT, EGP_ADVANCED},
-  {K_OFFSET,   HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, EGP_INT, EGP_ADVANCED},
-  {K_TARGET,   HW_L_TGT, HW_H_TGT, "0", nullptr, 0, GEIGERHW_MAX_V, 0, EGP_UINT, 0},
-  {K_OV_V,     nullptr,  nullptr,  STR(GEIGERHW_OV_V), nullptr, 0, 2000, 0, EGP_UINT, EGP_HIDDEN},
-  {K_OV_S,     nullptr,  nullptr,  STR(GEIGERHW_OV_S), nullptr, 1, 60, 0, EGP_UINT, EGP_HIDDEN},
-  {K_TRIM_MAX, nullptr,  nullptr,  STR(GEIGERHW_TRIM_MAX), nullptr, 0, 20, 0, EGP_UINT, EGP_HIDDEN},
-  // >= HV_TRIM_N, each step sees the last
-  {K_TRIM_S,   nullptr,  nullptr,  STR(GEIGERHW_TRIM_S), nullptr, HV_TRIM_N, 120, 0, EGP_UINT, EGP_HIDDEN},
-  {K_SETTLE_S, nullptr,  nullptr,  STR(GEIGERHW_SETTLE_S), nullptr, 0, 600, 0, EGP_UINT, EGP_HIDDEN},
-  {K_BOOT_S,   nullptr,  nullptr,  STR(GEIGERHW_BOOT_S), nullptr, 0, 1800, 0, EGP_UINT, EGP_HIDDEN},
+  {EG_K_RATIO, HW_L_RAT, HW_H_RAT, STR(GEIGERHW_ADC_RATIO),  nullptr, 0,    GEIGERHW_MAX_RATIO, 0, corium::P_INT, corium::P_ADVANCED},
+  {K_OFFSET,   HW_L_OFF, HW_H_OFF, STR(GEIGERHW_ADC_OFFSET), nullptr, -100, 100,   0, corium::P_INT, corium::P_ADVANCED},
+  {K_TARGET,   HW_L_TGT, HW_H_TGT, "0", nullptr, 0, GEIGERHW_MAX_V, 0, corium::P_UINT, 0},
+  {K_OV_V,     nullptr,  nullptr,  STR(GEIGERHW_OV_V), nullptr, 0, 2000, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_OV_S,     nullptr,  nullptr,  STR(GEIGERHW_OV_S), nullptr, 1, 60, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_TRIM_MAX, nullptr,  nullptr,  STR(GEIGERHW_TRIM_MAX), nullptr, 0, 20, 0, corium::P_UINT, corium::P_HIDDEN},
+  // at least HV_TRIM_N so each step sees the result of the last one
+  {K_TRIM_S,   nullptr,  nullptr,  STR(GEIGERHW_TRIM_S), nullptr, HV_TRIM_N, 120, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_SETTLE_S, nullptr,  nullptr,  STR(GEIGERHW_SETTLE_S), nullptr, 0, 600, 0, corium::P_UINT, corium::P_HIDDEN},
+  {K_BOOT_S,   nullptr,  nullptr,  STR(GEIGERHW_BOOT_S), nullptr, 0, 1800, 0, corium::P_UINT, corium::P_HIDDEN},
+#ifdef HV_RATIO_MV
+  {K_RATIO_MV, nullptr,  nullptr,  "0", nullptr, 0, 1, 0, corium::P_UINT, corium::P_HIDDEN},
+#endif
 #endif
 };
 
-static const EGPrefGroup HW_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup HW_PREF_GROUP PROGMEM = {
   "espghw", "HV Generator", 1,
   HW_PREF_ITEMS,
   sizeof(HW_PREF_ITEMS) / sizeof(HW_PREF_ITEMS[0]),
+  corium::P_CAT_SYSTEM | corium::P_CAT_BOARD, nullptr, 0,
 };
 
-const EGPrefGroup* HV::prefs_group() { return &HW_PREF_GROUP; }
+const corium::PrefGroup* HV::prefsGroup() { return &HW_PREF_GROUP; }
 
-void HV::on_prefs_loaded() {
-  set_freq((int)EGPrefs::getUInt("espghw", EG_K_FREQ));
-  set_duty((int)EGPrefs::getUInt("espghw", K_DUTY));
+#ifdef ESPG_HV_ADC
+// Without the ratio_mv flag the stored ratio is an old raw count, convert it to mV
+static int stored_ratio() {
+  int r = (int)corium::Prefs::getInt("espghw", EG_K_RATIO);
+#ifdef HV_RATIO_MV
+  if (!corium::Prefs::getUInt("espghw", K_RATIO_MV)) r = hv_ratio_to_mv(r, GEIGERHW_ADC_RATIO, GEIGERHW_MAX_RATIO);
+#endif
+  return r;
+}
+#endif
+
+void HV::onPrefsLoaded() {
+  set_freq((int)corium::Prefs::getUInt("espghw", EG_K_FREQ));
+  set_duty((int)corium::Prefs::getUInt("espghw", K_DUTY));
   clear_ov();
 #ifdef ESPG_HV_ADC
-  set_vd_ratio((int)EGPrefs::getInt("espghw", EG_K_RATIO));
-  set_vd_offset((int)EGPrefs::getInt("espghw", K_OFFSET));
-  set_hv_target((uint16_t)EGPrefs::getUInt("espghw", K_TARGET));
-  _ov_v = (uint16_t)EGPrefs::getUInt("espghw", K_OV_V);
-  _ov_trip_s = (uint8_t)EGPrefs::getUInt("espghw", K_OV_S);
-  _trim_max = (uint8_t)EGPrefs::getUInt("espghw", K_TRIM_MAX);
-  _trim_s = (uint8_t)EGPrefs::getUInt("espghw", K_TRIM_S);
-  _settle_s = (uint16_t)EGPrefs::getUInt("espghw", K_SETTLE_S);
-  _boot_s = (uint16_t)EGPrefs::getUInt("espghw", K_BOOT_S);
-  Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _hw_freq, _hw_duty, _hw_vd_ratio, _hv_target);
+  set_vd_ratio(stored_ratio());
+  set_vd_offset((int)corium::Prefs::getInt("espghw", K_OFFSET));
+  set_hv_target((uint16_t)corium::Prefs::getUInt("espghw", K_TARGET));
+  _ov_v = hv_ov_limit(corium::Prefs::getUInt("espghw", K_OV_V), GEIGERHW_OV_V);
+#if GEIGERHW_OV_V > 0
+#define OV_ZERO "default"
+#else
+#define OV_ZERO "off"
+#endif
+  _ov_trip_s = (uint8_t)corium::Prefs::getUInt("espghw", K_OV_S);
+  _trim_max = (uint8_t)corium::Prefs::getUInt("espghw", K_TRIM_MAX);
+  _trim_s = (uint8_t)corium::Prefs::getUInt("espghw", K_TRIM_S);
+  _settle_s = (uint16_t)corium::Prefs::getUInt("espghw", K_SETTLE_S);
+  _boot_s = (uint16_t)corium::Prefs::getUInt("espghw", K_BOOT_S);
+  corium::Log::console(PSTR("HV: freq: %d duty: %d vd: %d target: %d"), _freq, _duty, _vd_ratio, _hv_target);
   if (_ov_v != GEIGERHW_OV_V) {
-    Log::console(PSTR("HV: overvoltage cut-off %u V, build default %u V (0 = off)"),
-                 _ov_v, (unsigned)GEIGERHW_OV_V);
+    corium::Log::console(PSTR("HV: Overvoltage cut-off %u V, build default %u V (0 = " OV_ZERO ")"),
+                         _ov_v, (unsigned)GEIGERHW_OV_V);
   }
 #else
-  Log::console(PSTR("HV: freq: %d duty: %d"), _hw_freq, _hw_duty);
+  corium::Log::console(PSTR("HV: freq: %d duty: %d"), _freq, _duty);
 #endif
 }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
-static const EGLegacyAlias HW_LEGACY[] PROGMEM = {
+// A new freq or duty goes through the same safe path as /hvset
+void HV::onPrefsSaved() {
+  int f = (int)corium::Prefs::getUInt("espghw", EG_K_FREQ);
+  int d = (int)corium::Prefs::getUInt("espghw", K_DUTY);
+  if ((f != _freq || d != _duty) && !apply_freq_duty_safe(f, d)) return;
+  onPrefsLoaded();
+}
+
+// legacy import
+static const corium::LegacyAlias HW_LEGACY[] PROGMEM = {
   {"freq",   "freq"},
   {"duty",   "duty"},
 #ifdef ESPG_HV_ADC
@@ -131,41 +186,101 @@ static const EGLegacyAlias HW_LEGACY[] PROGMEM = {
 #endif
   {},
 };
-EGLegacyRows HV::legacy_aliases() { return HW_LEGACY; }
-// === END LEGACY IMPORT ===
+corium::LegacyRows HV::legacyAliases() { return HW_LEGACY; }
 
 HV::HV() {
 }
 
+bool HV::set_freq(int freq) {
+  freq = clamp(freq, GEIGERHW_MIN_FREQ, GEIGERHW_MAX_FREQ);
+#if CORIUM_HAS_TIMER1
+  force_write();  // loop() posts freq and duty together
+#else
+#ifdef GEIGERHW_MAX_ON_US
+  // Old duty at a lower freq means a longer on-time, so cap the duty first
+  int cap = hv_duty_cap(freq, GEIGERHW_MAX_ON_US);
+  if (_cur_duty > cap) {
+    ledcWrite(EGLED_HV_CHANNEL, cap);
+    _cur_duty = cap;
+  }
+#endif
+  // returns 0 if refused, the old timer keeps running
+  if (!ledcChangeFrequency(EGLED_HV_CHANNEL, freq, HV_PWM_BITS)) {
+    pwm_off(freq);
+    return false;
+  }
+#endif
+  _freq = freq;
+  return true;
+}
+
+#if !CORIUM_HAS_TIMER1
+// Same as a failed pwm_begin
+void HV::pwm_off(int freq) {
+  corium::Log::console(PSTR("HV: PWM can't run %d Hz - HV inactive"), freq);
+  if (_pwm_pin >= 0) {
+    ledcDetachPin(_pwm_pin);
+    pinMode(_pwm_pin, OUTPUT);
+    digitalWrite(_pwm_pin, LOW);
+  }
+  _pwm_pin = -1;
+  corium::Registry::every(this, 0);
+}
+#endif
+
+int HV::max_duty() const {
+  int top = GEIGERHW_MAX_DUTY;
+#ifdef GEIGERHW_MAX_ON_US
+  int cap = hv_duty_cap(_freq, GEIGERHW_MAX_ON_US);
+  if (cap < top) top = cap;
+#endif
+#if !CORIUM_HAS_TIMER1
+  // ledc writes 1023 as full on, EGTimer1 keeps its own off time
+  int low = HV_PWM_MAX - 1 - hv_duty_cap(_freq, HV_MIN_OFF_US);
+  if (low < top) top = low;
+#endif
+  return top;
+}
+
 void HV::set_duty(int duty) {
-  _hw_duty = clamp(duty, 1, GEIGERHW_MAX_DUTY);
+  _duty = clamp(duty, 1, max_duty());
 }
 
 void HV::clear_ov() {
-  if (_ov_trip) Log::console(PSTR("HV: overvoltage cut-off cleared"));
+  if (_ov_trip) corium::Log::console(PSTR("HV: Overvoltage cut-off cleared"));
   _ov_trip = false;
-  _ov_secs = 0;
+  _over_s = 0;
   _duty_trim = 0;
-  _cur_duty = -1;
+  force_write();
 }
 
 void HV::write_duty() {
-  int eff_duty = (_ov_trip || _held) ? 1 : clamp(_hw_duty + _duty_trim, 1, GEIGERHW_MAX_DUTY);
+#ifdef ESPGEIGER_HW32
+  if (_fb_fault) return;   // pin has been released
+#endif
+  // Duty 1 while tripped or held
+  int eff_duty = (_ov_trip || _held) ? 1 : clamp(_duty + _duty_trim, 1, max_duty());
+#ifdef ESPGEIGER_HW32
+  eff_duty = hv_ramp_duty(eff_duty, _ramp, GEIGERHW_RAMP_S);
+#endif
   if (_cur_duty == eff_duty) return;
-#ifdef ESP8266
-  EGTimer1::pwm_set((uint32_t)_hw_freq, (uint32_t)eff_duty, HV_PWM_MAX);
+#if CORIUM_HAS_TIMER1
+  EGTimer1::pwm_set((uint32_t)_freq, (uint32_t)eff_duty, HV_PWM_MAX);
 #else
   ledcWrite(EGLED_HV_CHANNEL, eff_duty);
 #endif
   _cur_duty = eff_duty;
 }
 
-// write now, OTA stops HV::loop
+// Write the duty now, HV::loop doesn't run during OTA
 void HV::hold(bool restarting) {
   _held = true;
+#ifdef ESPGEIGER_HW32
+  _ramp = 0;   // soft start again if the OTA fails
+#endif
   write_duty();
   if (!restarting) return;
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
   EGTimer1::pwm_stop();   // leaves the pin low
 #else
   ledcWrite(EGLED_HV_CHANNEL, 0);
@@ -174,218 +289,354 @@ void HV::hold(bool restarting) {
 
 void HV::release_hold() {
   _held = false;
-  _cur_duty = -1;
+  force_write();
   write_duty();
 }
 
-static void hv_lifecycle(Lifecycle::Event e) {
-  if (e == Lifecycle::OTA_FAILED) hv.release_hold();
-  else hv.hold(e == Lifecycle::SHUTDOWN);
+static void hv_lifecycle(corium::Lifecycle::Event e) {
+  if (e == corium::Lifecycle::OTA_FAILED) hv.release_hold();
+  else hv.hold(e == corium::Lifecycle::SHUTDOWN);
 }
 
 void HV::set_pwm_pin(int pin) {
   const char* why = nullptr;
 #ifdef ESP8266
-  if (pin == 16) why = PSTR("no PWM on GPIO 16");
+  if (pin == 16) why = PSTR("no PWM on GPIO16");
 #endif
-  if (!why) why = PinSafety::claim_output(pin, PSTR("HV"));
+  if (!why) why = corium::PinSafety::claimOutput(pin, PSTR("HV"));
   if (why) {
-    Log::console(PSTR("HV: pwm_pin=%d unsafe (%s) - disabled"), pin, why);
+    corium::Log::console(PSTR("HV: pwm_pin=%d unsafe (%s) - disabled"), pin, why);
     pin = -1;
   }
   _pwm_pin = pin;
+  if (pin < 0) return;
+  // Hold the gate low until begin(), in safe mode too
+  pinMode(pin, OUTPUT);
+  digitalWrite(pin, LOW);
 }
+
+#ifdef HV_RATIO_MV
+// One-off move to a mV ratio, ratio and flag in one write.
+// If it's refused the stored ratio stays raw and is still converted when read.
+static void ratio_to_mv(int mv) {
+  if (corium::Prefs::getUInt("espghw", K_RATIO_MV)) return;
+  int raw = (int)corium::Prefs::getInt("espghw", EG_K_RATIO);
+  // Both ratio and flag, or neither
+  if (!corium::Prefs::putInt("espghw", EG_K_RATIO, mv) || !corium::Prefs::putUInt("espghw", K_RATIO_MV, 1)) {
+    corium::Prefs::revert("espghw");
+    return;
+  }
+  if (mv != raw) corium::Log::console(PSTR("HV: Ratio %d now %d (mV), check it"), raw, mv);
+  (void)corium::Prefs::commit(false);   // if it fails both stay pending and go with the next save
+}
+#endif
+
+#if CORIUM_HAS_LEDC
+// A crash or restart only resets the CPU, LEDC keeps driving the gate at its last duty.
+// Runs before setup and the pin isn't known until prefs load, so registers only (the driver's state was in RAM)
+__attribute__((constructor)) static void gate_off() {
+  if (!periph_ll_periph_enabled(PERIPH_LEDC_MODULE)) return;   // cold power on, already off
+  // group 0: esp32 high speed, c3 low speed
+  LEDC.channel_group[0].channel[EGLED_HV_CHANNEL].conf0.idle_lv = 0;
+  LEDC.channel_group[0].channel[EGLED_HV_CHANNEL].conf0.sig_out_en = 0;
+#if !SOC_LEDC_SUPPORT_HS_MODE
+  LEDC.channel_group[0].channel[EGLED_HV_CHANNEL].conf0.low_speed_update = 1;   // low speed waits for this
+#endif
+}
+#endif
 
 void HV::begin() {
   if (_pwm_pin < 0) {
-    Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
-    EGModuleRegistry::set_loop_interval(this, -1);
+    corium::Log::console(PSTR("HV: PWM pin disabled (-1) - HV inactive"));
+    corium::Registry::every(this, 0);
   } else {
-    Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
-#ifdef ESP8266
+    corium::Log::console(PSTR("HV: PWM Setup on pin %d"), _pwm_pin);
+#if CORIUM_HAS_TIMER1
     pinMode(_pwm_pin, OUTPUT);
     digitalWrite(_pwm_pin, LOW);
     if (!EGTimer1::pwm_begin(_pwm_pin)) {
-      Log::console(PSTR("HV: pin %d can't run the PWM - HV inactive"), (int)_pwm_pin);
+      corium::Log::console(PSTR("HV: Pin %d can't run the PWM - HV inactive"), (int)_pwm_pin);
       _pwm_pin = -1;
-      EGModuleRegistry::set_loop_interval(this, -1);
+      corium::Registry::every(this, 0);
     }
 #else
-    ledcSetup(EGLED_HV_CHANNEL, _hw_freq, HV_PWM_BITS);
-    ledcAttachPin(_pwm_pin, EGLED_HV_CHANNEL);
+    if (ledcSetup(EGLED_HV_CHANNEL, _freq, HV_PWM_BITS)) ledcAttachPin(_pwm_pin, EGLED_HV_CHANNEL);
+    else pwm_off(_freq);
 #endif
-    if (_pwm_pin >= 0) Lifecycle::on(hv_lifecycle);
+    if (_pwm_pin >= 0) {
+      corium::Lifecycle::on(hv_lifecycle);
+      corium::Registry::every(this, LOOP_MS);
+    }
   }
 #ifdef ESPG_HV_ADC
   hvReading.begin();
-  _trim_settle_until = fast_millis() + (unsigned long)_boot_s * 1000UL;
+#ifdef HV_RATIO_MV
+  ratio_to_mv(_vd_ratio);
 #endif
+  _settle.set(corium::fastMillis() + (unsigned long)_boot_s * 1000UL);
+  restore_trim();
+#endif
+}
+
+// Health bits 4-6, only when the board has a reading
+static void note_health(HV& h) {
+  bool on = h.get_pwm_pin() >= 0 && h.get_vd_ratio() != 0;
+  health().put(H_HV, on ? (uint16_t)(h.hv_low() << H_HV_LOW |
+                                     h.ov_tripped() << H_HV_HIGH |
+                                     h.fb_fault() << H_HV_FB) : 0);
 }
 
 void HV::loop(unsigned long now) {
 #ifdef ESPG_HV_ADC
-  // median drops wifi ADC spikes
-  if (_adc_n < HV_ADC_MAX) _adc[_adc_n++] = analogRead(GEIGER_VFEEDBACKPIN);
+  sample_adc();
 #endif
-#ifdef ESP8266
+#if CORIUM_HAS_TIMER1
   check_handler();
-  static uint8_t pass;
-  if (++pass < LOOP_SLOW) return;
-  pass = 0;
-#ifdef EG_TIMER1_STATS
+#endif
+#if CORIUM_HAS_TIMER1 || defined(ESPG_HV_ADC)
+  if (++_pass < LOOP_SLOW) return;
+  _pass = 0;
+#endif
+#if CORIUM_HAS_TIMER1 && defined(EG_TIMER1_STATS)
   EGTimer1::stats_tick();
 #endif
+#ifdef ESPGEIGER_HW32
+  check_feedback();   // sample is from last second's duty. Ratio 0 doesn't turn this check off
+  if (_ramp < GEIGERHW_RAMP_S) _ramp++;
+  note_low();
 #endif
   if (_pwm_pin >= 0) write_duty();
+  note_health(*this);
 #ifdef ESPG_HV_ADC
-  if (_hw_vd_ratio == 0) return;
-  bool settled = gcounter.is_warm() && (long)(now - _trim_settle_until) >= 0;
+  adc_second(now);
+#endif
+}
+
+#ifdef ESPG_HV_ADC
+void HV::adc_second(unsigned long now) {
+  if (_settle.due(now)) _settle.clear();   // clear once due, else it goes wrong after the millis() wrap
+  if (_vd_ratio == 0) {
+    _adc_n = 0;
+    return;
+  }
+  bool settled = gcounter.is_warm() && !_settle.armed();
   int volts = read_hv();
   check_overvoltage(volts);
   if (_hv_target > 0 && !_ov_trip && settled) trim_step();
-#endif
 }
+#endif
 
-#ifdef ESP8266
-// stalled handler may leave the pin high
+#if CORIUM_HAS_TIMER1
+// A stalled Timer1 handler can leave the pin high, stop it and restart a few times
 void HV::check_handler() {
   if (_pwm_pin < 0) return;
-  static uint32_t last_entries;
-  static uint8_t restarts;
   uint32_t n = EGTimer1::entries();
-  bool stalled = EGTimer1::pwm_running() && n == last_entries;
-  last_entries = n;
+  bool stalled = EGTimer1::pwm_running() && n == _t1_entries;
+  _t1_entries = n;
   if (!stalled) return;
   EGTimer1::pwm_stop();
-  if (restarts >= PWM_RESTARTS) {
-    Log::console(PSTR("HV: PWM handler stopped - pin held low"));
+  if (_t1_restarts >= PWM_RESTARTS) {
+    corium::Log::console(PSTR("HV: PWM handler stopped - pin held low"));
     return;
   }
-  restarts++;
+  _t1_restarts++;
   EGTimer1::restart();
   EGTimer1::pwm_begin(_pwm_pin);
-  _cur_duty = -1;
+  force_write();
   write_duty();
-  Log::console(PSTR("HV: PWM handler stopped - restarted (%u of %u)"),
-               (unsigned)restarts, (unsigned)PWM_RESTARTS);
+  corium::Log::console(PSTR("HV: PWM handler stopped - restarted (%u of %u)"),
+                       (unsigned)_t1_restarts, (unsigned)PWM_RESTARTS);
 }
 #endif
 
 #ifdef ESPG_HV_ADC
+// Median gets rid of the ADC spikes from WiFi
+void HV::sample_adc() {
+  if (_adc_n >= HV_ADC_MAX) return;
+#if CORIUM_HAS_ADC_MV
+  _adc[_adc_n++] = analogReadMilliVolts(GEIGER_VFEEDBACKPIN);   // calibrated, ratio in mV
+#else
+  _adc[_adc_n++] = analogRead(GEIGER_VFEEDBACKPIN);
+#endif
+}
+
 int HV::read_hv() {
-  int volts = hv_volts(_hw_vd_ratio, hv_median2(_adc, _adc_n), 2, _hw_vd_offset);
+  int volts = hv_volts(_vd_ratio, hv_median2(_adc, _adc_n), 2, _vd_offset);
   _adc_n = 0;
-  uint16_t v = (uint16_t)(volts < 0 ? 0 : volts);
+  // Ring sums in 16 bits, clamp so a mis-set ratio reads high instead of wrapping low
+  uint16_t v = (uint16_t)clamp(volts, 0, (int)(UINT16_MAX / HV_TRIM_N));
   hvReading.add(v);
   _hv_prev = v;
   return volts;
 }
 
-// raw, must trip in seconds
+// Uses the raw reading, not the average, so it trips within seconds
 void HV::check_overvoltage(int volts) {
   if (_ov_trip) return;
-  _ov_secs = hv_over_count(_ov_secs, volts, _ov_v);
-  if (_ov_secs < _ov_trip_s) return;
+  _over_s = hv_over_count(_over_s, volts, _ov_v);
+  if (_over_s < _ov_trip_s) return;
   _ov_trip = true;
+  unstash_trim();   // a restart starts the trim from 0, not from the trip's
   if (_pwm_pin >= 0) write_duty();
-  Log::console(PSTR("HV: %d V is over the %u V limit - duty held at minimum until settings are saved"),
-               volts, _ov_v);
+  corium::Log::console(PSTR("HV: %d V is over the %u V limit - duty held at minimum until settings are saved"),
+                       volts, _ov_v);
+  corium::Registry::emit(TOPIC_FAULT);
+  Notice::show(HV_NOTICE);
 }
 
-void HV::trim_step() {
-  static uint8_t secs = 0;
-  if (++secs < _trim_s) return;
-  secs = 0;
+#ifdef ESPGEIGER_HW32
+// An open divider reads ~0 while driving, an open low leg reads the top of the ADC
+void HV::check_feedback() {
+  if (_fb_fault || _pwm_pin < 0 || !_adc_n) return;
+  int mv = (int)(hv_median2(_adc, _adc_n) / 2);
+  _fb_bad_s = hv_bad_count(_fb_bad_s, mv, _cur_duty > 1, GEIGERHW_FB_LOW_MV, GEIGERHW_FB_HIGH_MV);
+  if (_fb_bad_s < GEIGERHW_FB_BAD_S) return;
+  _fb_fault = true;
+  ledcWrite(EGLED_HV_CHANNEL, 0);
+  ledcDetachPin(_pwm_pin);
+  pinMode(_pwm_pin, INPUT);   // base pull-down holds it off
+  corium::Log::console(PSTR("HV: Feedback %d mV out of range, off until restart"), mv);
+  corium::Registry::emit(TOPIC_FAULT);
+  Notice::show(HV_NOTICE);
+}
+#endif
+
+static int trim_band(int ratio) {
+  int band = hvtrim_band(ratio);
+  return band < GEIGERHW_TRIM_BAND_MIN ? GEIGERHW_TRIM_BAND_MIN : band;
+}
+
+#ifdef ESPGEIGER_HW32
+// Uses last second's reading
+void HV::note_low() {
+  bool top = _hv_target > 0 && _vd_ratio > 0 && hv_no_room(_duty, _duty_trim, _trim_max, max_duty());
   int err = (int)_hv_target - (int)hvReading.get();
-  int band = hvtrim_band(_hw_vd_ratio);
+  _low_s = hv_low_count(_low_s, err, trim_band(_vd_ratio), top);
+}
+#endif
+
+// One duty step every trim_s when outside the band, up to +-trim_max
+void HV::trim_step() {
+  if (++_trim_age_s < _trim_s) return;
+  _trim_age_s = 0;
+  int err = (int)_hv_target - (int)hvReading.get();
+  int band = trim_band(_vd_ratio);
   int8_t old_trim = _duty_trim;
   if      (err >  band && _duty_trim <  _trim_max) _duty_trim++;
   else if (err < -band && _duty_trim > -_trim_max) _duty_trim--;
   if (_duty_trim != old_trim) {
-    Log::console(PSTR("HV: trim %d -> %d (err %d, band %d)"), old_trim, _duty_trim, err, band);
+    corium::Log::console(PSTR("HV: Trim %d -> %d (err %d, band %d)"), old_trim, _duty_trim, err, band);
+    stash_trim();
   }
+}
+
+// Trim kept in RTC memory over a restart, lost on a power cut
+namespace {
+constexpr uint32_t TRIM_RTC_MAGIC = 0xCAFE7121;  // bump on layout change
+struct TrimRtc { uint32_t magic; uint32_t freq; uint16_t duty, target, ratio; int8_t trim; uint8_t pad; };
+CORIUM_RTC_SLOT(TrimSlot, TrimRtc, corium::RtcMap::APP2_AT, corium::RtcMap::APP2_WORDS);
+}
+
+void HV::stash_trim() {
+  TrimSlot::write(TrimRtc{TRIM_RTC_MAGIC, (uint32_t)_freq, (uint16_t)_duty, _hv_target,
+                          (uint16_t)_vd_ratio, _duty_trim, 0});
+}
+
+void HV::unstash_trim() { TrimSlot::clear(); }
+
+// Only restore it if duty, freq, target and ratio match what it was learned at
+void HV::restore_trim() {
+  TrimRtc r;
+  if (!TrimSlot::read(r) || r.magic != TRIM_RTC_MAGIC) return;
+  if (r.freq != (uint32_t)_freq || r.duty != _duty || r.target != _hv_target || r.ratio != _vd_ratio) return;
+  _duty_trim = (int8_t)clamp((int)r.trim, -(int)_trim_max, (int)_trim_max);
 }
 #endif
 
-void HV::apply_freq_duty_safe(int new_freq, int new_duty) {
+bool HV::apply_freq_duty_safe(int new_freq, int new_duty) {
   if (_pwm_pin >= 0) {
-#ifdef ESP8266
-    EGTimer1::pwm_set((uint32_t)_hw_freq, 1, HV_PWM_MAX);
+#if CORIUM_HAS_TIMER1
+    EGTimer1::pwm_set((uint32_t)_freq, 1, HV_PWM_MAX);
 #else
     ledcWrite(EGLED_HV_CHANNEL, 1);
 #endif
     delay(20);
   }
-  set_freq(new_freq);
+  if (!set_freq(new_freq)) return false;
   set_duty(new_duty);
-  _cur_duty = -1;
+  force_write();
   _duty_trim = 0;
-  _trim_settle_until = fast_millis() + (unsigned long)_settle_s * 1000UL;
+  if (_pwm_pin >= 0) write_duty();   // now, not on the next second
+  _settle.set(corium::fastMillis() + (unsigned long)_settle_s * 1000UL);
+  return true;
 }
 
-void HV::saveconfig() {
-  EGPrefs::putInt("espghw", EG_K_FREQ, _hw_freq);
-  EGPrefs::putInt("espghw", K_DUTY, _hw_duty);
+// Returns false if any put is refused, the rest are still saved
+bool HV::saveconfig() {
+  bool ok = corium::Prefs::putInt("espghw", EG_K_FREQ, _freq);
+  ok &= corium::Prefs::putInt("espghw", K_DUTY, _duty);
 #ifdef ESPG_HV_ADC
-  EGPrefs::putInt("espghw", EG_K_RATIO, _hw_vd_ratio);
-  EGPrefs::putInt("espghw", K_OFFSET, _hw_vd_offset);
-  EGPrefs::putInt("espghw", K_TARGET, _hv_target);
+#ifdef HV_RATIO_MV
+  // mV ratio only goes in with its flag, if refused the stored one still reads the same
+  uint32_t was = corium::Prefs::getUInt("espghw", K_RATIO_MV);
+  bool mv = corium::Prefs::putUInt("espghw", K_RATIO_MV, 1) && corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
+  if (!mv && !was) (void)corium::Prefs::putUInt("espghw", K_RATIO_MV, 0);
+  ok &= mv;
+#else
+  ok &= corium::Prefs::putInt("espghw", EG_K_RATIO, _vd_ratio);
 #endif
-  EGPrefs::commit();
+  ok &= corium::Prefs::putInt("espghw", K_OFFSET, _vd_offset);
+  ok &= corium::Prefs::putInt("espghw", K_TARGET, _hv_target);
+#endif
+  return corium::Prefs::commitSoon(corium::fastMillis()) && ok;
 }
 
 extern const char HV_STATUS_PAGE_BODY[] PROGMEM = R"HTML(
 <canvas id=g1></canvas><div id=g2></div>
 <div class="a aw">
-<span class="cl" onclick="this.parentElement.style.display='none';">×</span>
 <strong>Disconnect your tube before adjusting! This reading is indicative only.</strong> Confirm with your HV meter.
 </div>
-<table><tr><th><label for=freq>Frequency:</label></th><td><input type="range" id="freq" min="0" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" step="100" value="50"><input id="sfreq" class=mt type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" style="width:6em"> Hz</td></tr>
-<tr><th><label for=duty>Duty:</label></th><td><input type="range" id="duty" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" value="50"><input id="sduty" class=mt type="number" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" style="width:6em"> <small id="pduty" data-fs=")HTML" STR(HV_PWM_MAX) R"HTML("></small></td></tr>
-<tr><th><label for=ratio>Ratio:</label></th><td><input id="ratio" value="-" type="number" min="0" max="9999"> <small>(voltage-divider scale, 0 = disabled)</small></td></tr>
-<tr><th><label for=tgt>Target:</label></th><td><input id="tgt" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_V) R"HTML("> V <small>(0 = open loop) <span id="strim"></span></small></td></tr>
+<table><tr><th><label for=freq>PWM frequency:</label></th><td><input type="range" id="freq" min=")HTML" STR(GEIGERHW_MIN_FREQ) R"HTML(" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" step="100" value="50"><input id="sfreq" aria-label=Frequency class=mt type="number" min=")HTML" STR(GEIGERHW_MIN_FREQ) R"HTML(" max=")HTML" STR(GEIGERHW_MAX_FREQ) R"HTML(" style="width:6em"> Hz</td></tr>
+<tr><th><label for=duty>PWM duty:</label></th><td><input type="range" id="duty" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" value="50"><input id="sduty" aria-label=Duty class=mt type="number" min="1" max=")HTML" STR(GEIGERHW_MAX_DUTY) R"HTML(" style="width:6em"> <small id="pduty" data-fs=")HTML" STR(HV_PWM_MAX) R"HTML("></small></td></tr>
+<tr><th><label for=ratio>Divider ratio:</label></th><td><input id="ratio" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_RATIO) R"HTML("> <small>(0 = off)</small></td></tr>
+<tr><th><label for=tgt>HV target:</label></th><td><input id="tgt" value="-" type="number" min="0" max=")HTML" STR(GEIGERHW_MAX_V) R"HTML("> V <small>(0 = open loop) <span id="strim" role=status></span></small></td></tr>
 
-<tr><td><button id="submit" disabled>Loading…</button></td></tr></table>
-<script src="/hvjs)HTML" EG_CACHE_BUST R"HTML("></script>
+<tr><td><button id="submit" disabled>Loading...</button></td></tr></table>
+)HTML"
+#if !CORIUM_HAS_FEW_SOCKETS
+R"HTML(<script src="/pgjs)HTML" CORIUM_CACHE_BUST R"HTML("></script>
+)HTML"
+#endif
+R"HTML(<script src="/hvjs)HTML" CORIUM_CACHE_BUST R"HTML("></script>
 )HTML";
 
 #if !EG_GZ_HVJS_BUNDLE
-extern const char hvJS[] PROGMEM = R"JS("use strict";
+extern const char hvJS[] PROGMEM = R"JS(
 var e=new Graph("g1",["Volts"],"V","g2",5,null,0,!0,!0,5,15),
-D=Date,X=XMLHttpRequest,O=setTimeout,
 G1=byID('g1'),G2=byID('g2'),
 FQ=byID('freq'),DU=byID('duty'),RT=byID('ratio'),TG=byID('tgt'),
 SF=byID('sfreq'),SD=byID('sduty'),PD=byID('pduty'),ST=byID('strim'),SB=byID('submit'),
 TRow=TG.closest('tr'),
-lt,lf=0,ge=!0,inited=!1;
+M=['','(overvoltage cut-off: save to retry)','(feedback fault: HV off until restart)','(at its limit, still under target: raise duty or lower target)'],
+ge=!0,inited=!1;
 e.av=3;
 function showGraph(on){if(on===ge)return;ge=on;var d=on?'':'none';G1.style.display=d;G2.style.display=d;TRow.style.display=d}
-function gethv(){
-  clearTimeout(lt);
-  var x=new X;
-  x.onload=function(){
-    if(x.status==200){
-      var o=JSON.parse(x.responseText);
-      showGraph(o.ratio>0);
-      if(o.ratio>0)e.update([o.volts]);
-      if(!inited){
-        inited=!0;
-        if(o.fmax)FQ.max=SF.max=o.fmax;
-        if(o.dmax)DU.max=SD.max=o.dmax;
-        FQ.value=o.freq;DU.value=o.duty;RT.value=o.ratio;TG.value=o.target;
-        SF.value=o.freq;SD.value=o.duty;ton();
-        SB.disabled=!1;SB.textContent='Submit';
-      }
-      ST.textContent=o.ov?'(overvoltage cut-off: save to retry)':o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'';
-    }
-    lf=D.now();lt=O(gethv,1e3);
-  };
-  x.open('GET','/hvjson',!0);
-  x.send();
-  return!1;
-}
-addEventListener("load",gethv);
-document.addEventListener("visibilitychange",function(){if(!document.hidden){clearTimeout(lt);lt=O(gethv,Math.max(0,1e3-(D.now()-lf)))}});
+var hvK=live('/hvjson',1e3,function(s){
+  if(s==null){ST.textContent='(not updating)';return 1e3}
+  var o=JSON.parse(s);
+  showGraph(o.ratio>0);
+  if(o.ratio>0)e.update([o.volts]);
+  if(!inited){
+    inited=!0;
+    if(o.fmax)FQ.max=SF.max=o.fmax;
+    if(o.dmax)DU.max=SD.max=o.dmax;
+    FQ.value=o.freq;DU.value=o.duty;RT.value=o.ratio;TG.value=o.target;
+    SF.value=o.freq;SD.value=o.duty;ton();
+    SB.disabled=!1;SB.textContent='Submit';
+  }
+  ST.textContent=M[o.ov]||(o.trim?'(trim '+(o.trim>0?'+':'')+o.trim+')':'');
+});
+addEventListener("load",()=>hvK(0));
 function tie(r,n,f){
   f=f||function(){};
   r.addEventListener("input",function(){n.value=r.value;f()});
@@ -395,42 +646,40 @@ function tie(r,n,f){
 function ton(){PD.textContent=SD.value&&SF.value>0?'('+(SD.value*1e6/PD.dataset.fs/SF.value).toFixed(1)+' \xb5s on)':''}
 tie(FQ,SF,ton);tie(DU,SD,ton);
 SB.addEventListener("click",function(){
-  var x=new X;
-  x.onload=function(){
-    if(x.status==200){
-      SF.value='';SD.value='';ton();inited=!1;
-    }
-  };
-  x.open('GET','/hvset?f='+SF.value+'&d='+SD.value+'&r='+RT.value+'&t='+TG.value,!0);
-  x.send();
+  fetch('/hvset?f='+SF.value+'&d='+SD.value+'&r='+RT.value+'&t='+TG.value).then(r=>{
+    if(r.ok){SF.value='';SD.value='';ton();inited=!1}else r.text().then(alert)
+  });
 });
 )JS";
 #endif
 
+#if CORIUM_HAS_FEW_SOCKETS
 extern const char picographJS[] PROGMEM;
+#endif
 
 static void hHv(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.beginChunked(200, FPSTR(HTTP_CT_HTML));
-  WebPortal::sendPageHead(res, F("HV"));
+  corium::WebPortal::beginPage(res, F("HV"));
   res.sendChunk(FPSTR(HV_STATUS_PAGE_BODY));
-  WebPortal::sendPageTail(res);
-  res.endChunked();
+  corium::WebPortal::endPage(res);
 }
 
 static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  // arg() buffer is shared, parse each now
+  // arg() returns a shared buffer, parse each one straight away
   int new_freq = -1, new_duty = -1, new_ratio = -1, new_target = -1;
   int32_t v;
-  const char* p = req.arg(F("d")); if (parse_i32(p, &v)) new_duty   = (int)v;
-  p = req.arg(F("f"));              if (parse_i32(p, &v)) new_freq   = (int)v;
-  p = req.arg(F("r"));              if (parse_i32(p, &v)) new_ratio  = (int)v;
-  p = req.arg(F("t"));              if (parse_i32(p, &v)) new_target = (int)v;
+  const char* p = req.arg(F("d")); if (parseI32(p, &v)) new_duty   = (int)v;
+  p = req.arg(F("f"));              if (parseI32(p, &v)) new_freq   = (int)v;
+  p = req.arg(F("r"));              if (parseI32(p, &v)) new_ratio  = (int)v;
+  p = req.arg(F("t"));              if (parseI32(p, &v)) new_target = (int)v;
 
   bool changed = false;
   if (new_duty >= 0 || new_freq >= 0) {
     int f = new_freq >= 0 ? new_freq : hv.get_freq();
     int d = new_duty >= 0 ? new_duty : hv.get_duty();
-    hv.apply_freq_duty_safe(f, d);
+    if (!hv.apply_freq_duty_safe(f, d)) {
+      res.send(400, FPSTR(HTTP_CT_PLAIN), F("Not saved: the PWM can't run that frequency, HV off"));
+      return;
+    }
     changed = true;
   }
   if (new_ratio >= 0)  { hv.set_vd_ratio(new_ratio); changed = true; }
@@ -440,20 +689,32 @@ static void hHvSet(EGHttpRequest& req, EGHttpResponse& res, void*) {
   }
   if (changed) {
     hv.clear_ov();   // also resets the trim
-    hv.saveconfig();
+    if (!hv.saveconfig()) {
+      // Same message as the Config page
+      char why[CORIUM_PREFS_FROZEN_MAX] = {};
+      if (!corium::Prefs::frozen(why, sizeof(why))) strncpy_P(why, corium::WRITE_FAILED, sizeof(why) - 1);
+      char buf[sizeof("Not saved: ") + CORIUM_PREFS_FROZEN_MAX];
+      snprintf_P(buf, sizeof(buf), PSTR("Not saved: %s"), why);
+      res.send(500, FPSTR(HTTP_CT_PLAIN), buf);
+      return;
+    }
   }
   res.send(200, FPSTR(HTTP_CT_PLAIN), FPSTR(W_OK_TEXT));
 }
 
 static void hHvJs(EGHttpRequest& req, EGHttpResponse& res, void*) {
-  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
 #if EG_GZ_HVJS_BUNDLE
-  res.sendGzipP(200, FPSTR(HTTP_CT_JS), HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
+  corium::WebPortal::sendGz(res, FPSTR(HTTP_CT_JS), HVJS_BUNDLE_GZ, HVJS_BUNDLE_GZ_LEN);
 #else
+  res.addHeader(FPSTR(HTTP_H_CACHE), FPSTR(HTTP_CACHE_FOREVER));
+#if CORIUM_HAS_FEW_SOCKETS
   res.beginChunked(200, FPSTR(HTTP_CT_JS));
   res.sendChunk(FPSTR(picographJS));
   res.sendChunk(FPSTR(hvJS));
   res.endChunked();
+#else
+  res.send(200, FPSTR(HTTP_CT_JS), FPSTR(hvJS));
+#endif
 #endif
 }
 
@@ -471,32 +732,54 @@ static void hHvJson(EGHttpRequest& req, EGHttpResponse& res, void*) {
     hv.get_hv_target(),
     hv.get_duty_trim(),
     GEIGERHW_MAX_FREQ,
-    GEIGERHW_MAX_DUTY,
-    hv.ov_tripped() ? 1 : 0);
+    hv.max_duty(),
+    hv.status());
   res.send(200, FPSTR(HTTP_CT_JSON), buf);
 }
 
-static bool m_hv(EGMValue* v) {
+static bool m_hv(corium::MValue* v) {
   if (hv.get_pwm_pin() < 0 || hv.get_vd_ratio() == 0) return false;
   v->i = (int32_t)(hv.hvReading.get() + 0.5f);
   return true;
 }
 
+// Over the limit, or the feedback fault latched
+static bool m_hv_fault(corium::MValue* v) {
+  if (hv.get_pwm_pin() < 0 || hv.get_vd_ratio() == 0) return false;
+  v->b = hv.ov_tripped() || hv.fb_fault();
+  return true;
+}
+
+static bool m_hv_tgt(corium::MValue* v)  { v->u = hv.get_hv_target(); return true; }
+static bool m_hv_duty(corium::MValue* v) { v->u = (uint32_t)hv.get_duty(); return true; }
+static bool m_hv_trim(corium::MValue* v) { v->i = hv.get_duty_trim(); return true; }
+
 static const char MP_HV[] PROGMEM = "device_hv_volts";
 static const char MH_HV[] PROGMEM = "Tube high voltage";
+static const char MP_HVF[] PROGMEM = "device_hv_fault";
+static const char MH_HVF[] PROGMEM = "1 while HV is held off: over the voltage limit or a feedback fault";
 
-static const EGMeasure HV_ROWS[] PROGMEM = {
-  EGM_PROW("hv", "", m_hv, EGM_I32, 0, EGMU_VOLT, EGM_OUT_ALL, 0, MP_HV, MH_HV, nullptr),
+static const corium::MProm HV_PROM[] PROGMEM = {
+  {MP_HV,  nullptr, MH_HV},
+  {MP_HVF, nullptr, MH_HVF},
+};
+static const corium::MRow HV_ROWS[] PROGMEM = {
+  CORIUM_M_PROW("hv", "", m_hv, corium::M_I32, 0, corium::MU_VOLT, corium::M_OUT_ALL, 0, 1),
+  CORIUM_M_PROW("hv_fault", "", m_hv_fault, corium::M_BOOL, 0, corium::MU_NONE, corium::M_OUT_ALL, 0, 2),
+  // read by id for the UdpBlip HV packet
+  CORIUM_M_ROW("hv_tgt",  "", m_hv_tgt,  corium::M_U32, 0, corium::MU_VOLT, corium::M_OUT_ID, 0),
+  CORIUM_M_ROW("hv_duty", "", m_hv_duty, corium::M_U32, 0, corium::MU_NONE, corium::M_OUT_ID, 0),
+  CORIUM_M_ROW("hv_trim", "", m_hv_trim, corium::M_I32, 0, corium::MU_NONE, corium::M_OUT_ID, 0),
 };
 
-EGMeasureRows HV::measurements() { return EGMeasureRows(HV_ROWS); }
+corium::MeasureRows HV::measurements() { return corium::MeasureRows(HV_ROWS, HV_PROM); }
 #endif
 
-static const EGMenuEntry HV_MENU[] PROGMEM = {
+static const corium::MenuEntry HV_MENU[] PROGMEM = {
   {"/hv", "HV Config"},
   {"", ""}
 };
-const EGMenuEntry* HV::menuEntries() { return HV_MENU; }
+const corium::MenuEntry* HV::menuEntries() { return HV_MENU; }
 
 void HV::registerRoutes(EGHttpServer& http) {
   http.on(F("/hv"),     EGHttpRequest::GET, hHv);
@@ -506,5 +789,15 @@ void HV::registerRoutes(EGHttpServer& http) {
   http.on(F("/hvjson"), EGHttpRequest::GET, hHvJson);
 #endif
 }
+
+// console
+#ifdef ESPG_HV_ADC
+static void cmd_hv() { corium::Log::console(PSTR("HV: %d"), (int)hv.hvReading.get()); }
+CORIUM_REGISTER_CMD(hv, cmd_hv)
+#endif
+#ifdef EG_HV_STALL_TEST
+static void cmd_t1stop() { timer1_disable(); }
+CORIUM_REGISTER_CMD(t1stop, cmd_t1stop)
+#endif
 
 #endif

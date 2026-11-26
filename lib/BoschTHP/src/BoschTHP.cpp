@@ -41,7 +41,7 @@ bool Sensor::begin(TwoWire& wire, uint8_t addr) {
     if (!probe(0x76) && !probe(0x77)) return false;
   }
   // ~2 ms for the NVM copy
-  write8(REG_RESET, 0xB6);
+  (void)write8(REG_RESET, 0xB6);   // readCal below says
   delay(5);
   if (!readCal()) { _chip = CHIP_NONE; return false; }
   if (!configure()) { _chip = CHIP_NONE; return false; }

@@ -22,7 +22,7 @@
 #include <string.h>
 #include <pgmspace.h>
 
-// f * scale, half to even as printf, scale 1 ties on ip
+// f * scale rounded half to even like printf, with scale 1 the tie goes on ip
 static uint32_t round_frac(float f, uint32_t scale, uint32_t ip) {
   uint32_t fb;
   memcpy(&fb, &f, sizeof(fb));
@@ -39,16 +39,16 @@ static uint32_t round_frac(float f, uint32_t scale, uint32_t ip) {
   return (uint32_t)qq;
 }
 
-int format_f(char* buf, size_t bufsz, float v, uint8_t decimals) {
+int format_f(char* buf, size_t cap, float v, uint8_t decimals) {
   uint32_t bits;
   memcpy(&bits, &v, sizeof(bits));
-  // a "-" literal goes in DRAM
+  // Sign written as a char, a "-" literal would go in DRAM
   size_t o = 0;
-  if ((bits >> 31) && bufsz > 1) buf[o++] = '-';
+  if ((bits >> 31) && cap > 1) buf[o++] = '-';
   int neg = (int)(bits >> 31);
   bits &= 0x7FFFFFFFu;
   if (bits >= 0x7F800000u)
-    return neg + snprintf_P(buf + o, bufsz - o, bits > 0x7F800000u ? PSTR("nan") : PSTR("inf"));
+    return neg + snprintf_P(buf + o, cap - o, bits > 0x7F800000u ? PSTR("nan") : PSTR("inf"));
   if (bits >= 0x4F800000u) bits = 0x4F7FFFFFu;   // saturate below 2^32
   memcpy(&v, &bits, sizeof(v));
 
@@ -58,7 +58,7 @@ int format_f(char* buf, size_t bufsz, float v, uint8_t decimals) {
   for (uint8_t i = 0; i < decimals; i++) scale *= 10;
   uint32_t q = round_frac(v - (float)ip, scale, ip);
   if (q >= scale) { q -= scale; ip++; }
-  if (!decimals) return neg + snprintf_P(buf + o, bufsz - o, PSTR("%lu"), (unsigned long)ip);
-  return neg + snprintf_P(buf + o, bufsz - o, PSTR("%lu.%0*lu"),
+  if (!decimals) return neg + snprintf_P(buf + o, cap - o, PSTR("%lu"), (unsigned long)ip);
+  return neg + snprintf_P(buf + o, cap - o, PSTR("%lu.%0*lu"),
                           (unsigned long)ip, (int)decimals, (unsigned long)q);
 }

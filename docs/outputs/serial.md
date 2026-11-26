@@ -8,35 +8,57 @@ nav_order: 10
 
 # Serial Output
 
-ESPGeiger has a software Serial interface allowing simple UART communication.
+ESPGeiger has a serial console on its USB / UART port. The same commands also work in the console box on the Status page.
 
 The default baud is `115200`
 
-Each command should be terminated with `\r\n`
+Each command ends with a newline (`\r`, `\n` or both).
 
-Note that Serial commands are __disabled__ on ESPGeiger-Log builds. This is due to the Serial RX pin being in use for the user input button.
+Serial commands are __disabled__ on ESPGeiger-Lite and ESPGeiger-Log builds: the serial RX pin is the user button. Use the console box on the Status page there.
 
 ## Commands
 
 | Command | Description | Example |
 |---|---|---|
-| `reboot` | Reboot ESPGeiger | `reboot` |
-| `resetwifi` | Erase WiFi credentials and drop into setup mode | `resetwifi` |
-| `resetnet` | Clear net.* prefs (static IP/gw/sn/dns) and reboot to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
+| `reboot` | Restart ESPGeiger | `reboot` |
+| `safe` | Restart into [safe mode](/configuration/safemode) | `safe` |
+| `ver` | Print the name, version and build | `ver` |
+| `resetwifi` | Erase WiFi credentials, clear the `net.*` settings (back to DHCP) and restart into the setup portal | `resetwifi` |
+| `resetnet` | Clear net.* settings (static IP/gw/sn/dns) and restart to DHCP. Recovery hatch when a bad static IP makes the web UI unreachable. | `resetnet` |
+| `offline` | Start this boot without WiFi, as holding the button at power-up does. Only while it boots: in the setup portal or while it joins the saved network. The next boot is normal. | `offline` |
 | `get <module>.<key>` | Read any pref. Sensitive values (passwords, keys) print as `***`. | `get counter.ratio` |
-| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, reboot-required prefs need a `reboot`. | `set counter.ratio 151.0` |
+| `set <module>.<key> <value>` | Write any pref. Validation (pattern/range/type) runs before the value sticks; live-apply prefs take effect immediately, restart-required prefs need a `reboot`. `net.*` (static IP) needs a `reboot` too; the old network settings are kept first, so a static IP that can't reach the gateway goes back at boot, as the web WiFi page does. | `set counter.ratio 151.0` |
+| `reset <module>.<key>` | Put one pref back to its default, same rules as `set`. `reset <module>` does the whole group. Never restarts or wipes anything else. | `reset counter.ratio` |
+| `pause [s]` | Stop posts to external services for s seconds, `pause 0` resumes, `pause` alone prints what's left. See [Pause](/output/pause) | `pause 600` |
 | `cpm` | Return current CPM value | |
-| `usv` | Return current μSv/h value | |
-| `show` | Enable 1-second CPM output | |
+| `usv` | Return current µSv/h value | |
+| `show` | Toggles the 1 second output: on when it is off, off when it is on | |
 | `show N` | Enable periodic output every N seconds (1-65535). Implies CPM. | `show 5` |
-| `show 0` | Disable periodic output (clears every field toggle) | `show 0` |
+| `show 0` | Stops the periodic output. The field toggles are kept for the next `show N` | `show 0` |
 | `show off` | Same as `show 0` | `show off` |
 | `show cpm` | Toggle CPM line inclusion in periodic output | `show cpm` |
 | `show cps` | Toggle CPS on periodic output | |
-| `show usv` | Toggle μSv on periodic output | |
-| `show hv` | Toggle HV on periodic output (ESPGHW only) | |
-| `hv` | Return current live HV value (ESPGHW only) | |
+| `show usv` | Toggle µSv on periodic output | |
+| `show hv` | Toggle HV on periodic output (builds with HV feedback: ESPGeiger-HW, `*_hv`) | |
+| `hv` | Return current live HV value (builds with HV feedback) | |
 | `target` | Set target CPM value for Test builds only | `target 1234` |
+| `layout` | ESP32: show the flash layout. `layout migrate` starts the [table move](/install/ota#esp32-4-mb-table-move) now | `layout migrate` |
+
+The console also answers while the setup portal is up and while it joins WiFi at boot. Until the device has finished booting only the commands from `reboot` to `reset` above run; the others answer `after boot`. In [safe mode](/configuration/safemode) they answer `off in safe mode`.
+
+### No WiFi at all
+
+`set wifi.mode 1` starts every boot without WiFi: no network, no setup portal, everything else runs (counter, display, HV, SD card rows in `undated.csv` until the time is known). It is not on the web Config page, because the page goes with it. To turn WiFi back on, `set wifi.mode 0` over USB and restart, or factory reset (hold the button 5 s at power-up).
+
+### Its own hotspot
+
+`set wifi.mode 2` makes the device start its own Wi-Fi hotspot each boot instead of joining a network. The hotspot is named after the hostname (e.g. `ESPGeiger-a1b2c3`), and the whole web UI is at `http://192.168.4.1` on it. Uploads and network time need the internet, so they stay off.
+
+* With a web password of 8 characters or more, the hotspot uses it as its Wi-Fi password. A shorter web password, or none, leaves the hotspot open, but the pages still ask for the web password if one is set.
+* `set wifi.ap_hide 1` hides the hotspot's name; you then join it by typing the name.
+* Until the time is set, the **Network Config** page shows *Clock not set* with a **Set from this browser** button. Press it and SD card rows are dated from then on.
+
+To join a network again, save one on the **Network Config** page: that also turns the hotspot off and restarts to join it. If it can't, it goes back to the network saved before, if any, else the setup portal opens instead of the hotspot. Or `set wifi.mode 0` (over USB, or in the console box on the Status page) and restart.
 
 ### Setting prefs
 
@@ -96,13 +118,13 @@ Turn it all off with `show 0` - periodic output stops and the regular log verbos
 
 The default output uses ESPGeiger's own labelled style, but the firmware can also emit lines in any of the protocols it supports on the input side. This is useful for piping data into existing tools that expect a particular counter's wire format, or for chaining ESPGeiger to a parent device that thinks it is talking to a real GC10 / MightyOhm.
 
-Set the format with the `sout.format` pref. These IDs are separate from the input-side Serial Type IDs.
+Set the format with the `sout.format` pref. These IDs are separate from the input-side Serial type IDs.
 
 | `set sout.format N` | Wire format | Default baud |
 |---|---|---|
 | `0` | Labelled (default), driven by `show cpm` / `cps` / `usv` / `hv` | unchanged |
 | `1` | MightyOhm | 9600 |
-| `2` | User template, see below | 115200 |
+| `2` | User template, see below | unchanged |
 
 When `sout.format` is non-zero the `show` field toggles are ignored. Output still only runs when `show N` (or `show 1`) has set a non-zero period.
 
@@ -170,7 +192,9 @@ cpm=30|cps=0.53|usv=0.17
 | `{sat}` | 1 when the rate is near the tube's dead-time limit |
 | `{warn}` | 1 while CPM is over the warning level |
 | `{alert}` | 1 while CPM is over the alert level |
+| `{health}` | `ok`, or what is wrong: `silent`, `storm`, `chatter`, `no_input`, `hv_low`, `hv_high`, `hv_fb`, `crashed`, `noclock`, `savefail`, `lowheap` |
 | `{hv}` | Measured HV in volts (HV ADC builds only) |
+| `{hv_fault}` | 1 while HV is held off (over the limit; HV ADC builds only) |
 | `{t}` | Temperature in user-preferred unit (env.unit) |
 | `{h}` | Relative humidity % |
 | `{p}` | Pressure in hPa |
@@ -210,12 +234,14 @@ If you leave off the trailing newline the firmware adds one for you. Multi-line 
 
 ## Baud rate
 
-Set `sout.baud` to override the serial baud rate at runtime. The change applies immediately on platforms that have a real UART (ESP8266 and classic ESP32 builds). On ESP32-S3 native USB builds the baud is virtual and the option is a no-op.
+Set `sout.baud` to override the serial baud rate while lines stream. The change applies immediately on ESP8266 and classic ESP32 builds, which have a real UART. With streaming off (`show 0`) the console stays at 115200, so the recovery commands always work there; the log says `Serial: N baud` just before each switch. On ESP32-S2, ESP32-S3 and ESP32-C3 builds the console is native USB and the baud setting does nothing.
 
 | `set sout.baud N` | Effect |
 |---|---|
-| `0` (default) | If `sout.format` is set to a known protocol, use that protocol's native baud. Otherwise keep the framework default (115200). |
-| Any non-zero value | Force this baud regardless of format. |
+| `0` (default) | If `sout.format` is set to a known protocol, use that protocol's native baud. Otherwise 115200. |
+| `9600`, `19200`, `38400`, `57600` or `115200` | Force this baud regardless of format. Any other number is refused. |
+
+A saved rate that isn't in the list doesn't load: the console says `Prefs: sout.baud refused, default kept`, the port runs at the format's own rate, and Serial out settings aren't saved until `sout.baud` is set again.
 
 After changing baud, reconnect your serial monitor at the new rate so it can decode the wire.
 
@@ -224,7 +250,9 @@ Examples:
 ```
 set sout.format 1       # MightyOhm: drops baud to 9600 automatically
 set sout.baud 19200     # override to 19200 regardless of format
-set sout.baud 0         # back to format-default (or framework default)
+set sout.baud 0         # format default; with format 0, back to 115200 at once
 ```
 
-The `sout` prefs (`format`, `baud`, `interval`, `flags`) are command-driven and do not appear on the Config page.
+A line longer than the UART can take at once goes out over the next few loop passes, so a long template line at 9600 baud still arrives whole.
+
+Wire format, Baud override and Template are on the Config page (System tab, **Serial out**). `interval` and `flags` are set by the `show` commands only.

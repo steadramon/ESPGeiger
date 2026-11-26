@@ -22,40 +22,47 @@
 
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 
+#include "App/ChipVoice.h"
 #include "Corium/Output/PulseEngine.h"
 #include "Corium/Output/QuietWindow.h"
 
-class PulseOut : public EGModule {
+class PulseOut : public corium::Module {
   public:
     PulseOut() {}
     const char* name() override { return PSTR("pulse"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint8_t display_order() override { return 14; }
-    uint16_t warmup_seconds() override { return 0; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
+    uint8_t displayOrder() override { return 14; }
     void begin() override;
-    const EGPrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
+    void onPrefsSaved() override;
 
-    // msTickerCB owns the pin, clicks post s_req
+    // The ms ticker owns the pin. Clicks post s_req, a polarity save bumps s_idle
     static volatile uint8_t s_req;
     static uint8_t s_seen;
+    static volatile uint8_t s_idle;
+    static uint8_t s_idle_seen;
     static bool s_busy;
-    static inline bool due() { return s_req != s_seen || s_busy; }
+    static inline bool due() { return s_req != s_seen || s_idle != s_idle_seen || s_busy; }
     void poll(uint32_t now_us);
 
     void notifyClick(unsigned long now_ms);
+    void park();   // from setup(), after prefs load
+    void stop() { _enabled = false; }
 
   private:
     void read_pin(bool was_enabled);
+    void apply_voice();
 
     bool          _enabled = false;
     bool          _begun = false;
     int8_t        _pin = -1;   // boot pref, msTicker owns the pin after begin
-    PulseEngine   _engine;
+    corium::PulseEngine _engine;
+    ChipBlip      _voice = {1.0f, 1.0f};   // set at begin
 
-    QuietWindow   _quiet;   // own, not the Blip LED one
+    corium::QuietWindow _quiet;   // own, not the Blip LED one
 
 };
 

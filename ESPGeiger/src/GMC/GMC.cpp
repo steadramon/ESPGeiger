@@ -18,61 +18,60 @@
 */
 #ifdef GMCOUT
 #include <EGFormat.h>
+#include <EGEscape.h>
 #include "GMC.h"
+#include "Counter/CounterMaths.h"
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/Words.h"
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Measure/Measure.h"
+#include "Counter/CounterUpload.h"
+#include "App/AppKeys.h"
+#include "App/FeatureBits.h"
+#include "App/MeasureIds.h"
+#include "Counter/Counter.h"
 
-EG_PSTR(K_AID,  "aid");
-EG_PSTR(K_GCID, "gcid");
+CORIUM_PSTR(K_AID,  "aid");
+CORIUM_PSTR(K_GCID, "gcid");
 
 GMC gmc;
-EG_REGISTER_MODULE(gmc)
+CORIUM_REGISTER_FEATURE(gmc, FEAT_GMC)
 
-EG_PSTR(M_WARM,   "warm");
-EG_PSTR(M_CPM_ST, "cpm_st");
-EG_PSTR(M_CPM5,   "cpm5");
-EG_PSTR(M_USV5,   "usv5");
+CORIUM_PSTR(GM_H_EN,  "Upload to gmcmap.com");
+CORIUM_PSTR(GM_L_AID, "Account ID");
+CORIUM_PSTR(GM_H_AID, "gmcmap.com account ID");
+CORIUM_PSTR(GM_P_ID,  "\\d{1,20}");
+CORIUM_PSTR(GM_L_GID, "Geiger Counter ID");
+CORIUM_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
 
-EG_PSTR(GM_H_EN,  "Upload to gmcmap.com");
-EG_PSTR(GM_L_AID, "Account ID");
-EG_PSTR(GM_H_AID, "gmcmap.com account ID");
-EG_PSTR(GM_P_ID,  "\\d{1,20}");
-EG_PSTR(GM_L_GID, "Geiger Counter ID");
-EG_PSTR(GM_H_GID, "gmcmap.com geiger counter ID");
+#define GMC_ID_MAX 20
 
-static const EGPref GMC_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SEND, EG_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  EGP_BOOL,   0},
-  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, 20, EGP_STRING, 0},
-  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, 20, EGP_STRING, 0},
+static const corium::Pref GMC_PREF_ITEMS[] PROGMEM = {
+  {EG_K_SEND, EG_L_EN,  GM_H_EN,  "0", nullptr,  0, 0, 0,  corium::P_BOOL,   0},
+  {K_AID,     GM_L_AID, GM_H_AID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, 0},   // NOLINT(sensitive-row) shown on the user's gmcmap page
+  {K_GCID,    GM_L_GID, GM_H_GID, "",  GM_P_ID,  0, 0, GMC_ID_MAX, corium::P_STRING, corium::P_SENSITIVE},
 };
 
-static const EGPrefGroup GMC_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup GMC_PREF_GROUP PROGMEM = {
   "gmc", "GMC", 1,
   GMC_PREF_ITEMS,
   sizeof(GMC_PREF_ITEMS) / sizeof(GMC_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND, 0,
 };
 
-const EGPrefGroup* GMC::prefs_group() { return &GMC_PREF_GROUP; }
+const corium::PrefGroup* GMC::prefsGroup() { return &GMC_PREF_GROUP; }
 
-void GMC::on_prefs_loaded() {
-  set_enabled(EGPrefs::getBool("gmc", EG_K_SEND));
-}
-
-// === LEGACY IMPORT (remove after v1.0.0) ===
-static const EGLegacyAlias GMC_LEGACY[] PROGMEM = {
+// legacy import
+static const corium::LegacyAlias GMC_LEGACY[] PROGMEM = {
   {"gmcSend", "send"},
   {"gmcAID",  "aid"},
   {"gmcGCID", "gcid"},
   {},
 };
-EGLegacyRows GMC::legacy_aliases() { return GMC_LEGACY; }
-// === END LEGACY IMPORT ===
+corium::LegacyRows GMC::legacyAliases() { return GMC_LEGACY; }
 
 GMC::GMC() {
-  pingIntervalMs = (uint32_t)GMC_INTERVAL * 1000UL;
+  _every_ms = (uint32_t)GMC_INTERVAL * 1000UL;
 }
 
 // "OK.ERR0" on success
@@ -81,44 +80,34 @@ bool GMC::interpret(const char* r)
   size_t n = strlen(r);
   char code = (n >= 5 && strncmp_P(r + n - 5, PSTR(".ERR"), 4) == 0) ? r[n - 1] : 0;
   if (code == '0') {
-    Log::debug(PSTR("GMC: Upload OK"));
+    corium::Log::debug(PSTR("GMC: Upload OK"));
     return true;
   } else if (code == '1') {
-    Log::console(PSTR("GMC: User is not found"));
+    corium::Log::console(PSTR("GMC: User is not found"));
   } else if (code == '2') {
-    Log::console(PSTR("GMC: Geiger Counter is not found"));
+    corium::Log::console(PSTR("GMC: Geiger Counter is not found"));
   } else {
-    Log::console(PSTR("GMC: Error"));
+    corium::Log::console(PSTR("GMC: Error"));
   }
   return false;
 }
 
 bool GMC::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!egm_b(M_WARM)) return false;
+  const char* id   = corium::Prefs::getString("gmc", K_AID);
+  const char* gcid = corium::Prefs::getString("gmc", K_GCID);
+  if (unset(id, GM_L_AID) || unset(gcid, GM_L_GID)) return false;
+  if (!upload_ready(logTag())) return false;
 
-  const char* _api_id    = EGPrefs::getString("gmc", K_AID);
-  const char* _api_gc_id = EGPrefs::getString("gmc", K_GCID);
-  bool has_id   = (_api_id[0]    != '\0');
-  bool has_gcid = (_api_gc_id[0] != '\0');
+  corium::Log::debug(PSTR("GMC: Uploading latest data ..."));
 
-  if (!has_id && !has_gcid) return false;
-
-  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    Log::console(PSTR("GMC: Testmode"));
-    return false;
-  }
-
-  if (!has_id || !has_gcid) {
-    Log::console(PSTR("GMC: Skipping upload, please set Account ID and GCID"));
-    return false;
-  }
-
-  Log::debug(PSTR("GMC: Uploading latest data ..."));
-
-  int avgcpm = (int)roundf(egm_f(M_CPM_ST));
+  char aid[3 * GMC_ID_MAX + 1], gid[3 * GMC_ID_MAX + 1];
+  egesc_url(aid, sizeof(aid), id);
+  egesc_url(gid, sizeof(gid), gcid);
+  // CPM is the 60 s bucket, ACPM and uSV the 5 min average
+  int cpm = CounterMaths::to_int(gcounter.get_cpmf_stable());
   char acpm[16], usv[16];
-  format_f(acpm, sizeof(acpm), egm_f(M_CPM5));
-  format_f(usv,  sizeof(usv),  egm_f(M_USV5), 4);
-  return url_fits(snprintf_P(url, cap, GMC_URI, _api_id, _api_gc_id, avgcpm, acpm, usv), cap);
+  format_f(acpm, sizeof(acpm), gcounter.get_cpm5f());
+  format_f(usv,  sizeof(usv),  gcounter.get_usv5(), 4);
+  return urlFits(snprintf_P(url, cap, GMC_URI, aid, gid, cpm, acpm, usv), cap);
 }
 #endif

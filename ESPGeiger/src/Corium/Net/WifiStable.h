@@ -1,6 +1,5 @@
 /*
-  WifiStable.h - how long WiFi has been up, apart from the rest of Wifi.h
-  so host tests use the same rule.
+  WifiStable.h - how long WiFi has been up
 
   Copyright (C) 2026 @steadramon
 
@@ -17,19 +16,22 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef UTIL_WIFISTABLE_H
-#define UTIL_WIFISTABLE_H
+#ifndef CORIUM_WIFISTABLE_H
+#define CORIUM_WIFISTABLE_H
 
 #include <stdint.h>
 #include "Corium/System/FastMillis.h"
 
+namespace corium {
 namespace Wifi {
-  extern uint32_t connected_at_ms;  // 0 when down
+  extern uint32_t connectedAtMs;  // 0 when down
+  extern bool settled;   // set once up past 2^31 ms, stays set over the wrap
 
-  // lets AsyncTCP drain after a reconnect
-  inline bool stable_for(uint32_t ms) {
-    return connected_at_ms != 0 && (uint32_t)(fast_millis() - connected_at_ms) >= ms;
+  // Lets AsyncTCP drain after a reconnect
+  inline bool stableFor(uint32_t ms) {
+    return connectedAtMs != 0 && (settled || (uint32_t)(fastMillis() - connectedAtMs) >= ms);
   }
 }
+}  // namespace corium
 
 #endif

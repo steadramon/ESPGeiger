@@ -44,5 +44,6 @@ jobs:
           python3 lib/EGTimeZone/tools/gen_timezones.py --check || {
             echo "::warning::tzdb moved. Bump lib/EGTimeZone/tools/requirements.txt,"
             echo "::warning::rerun gen_timezones.py, and commit the diff."
-            exit 1
+            # weekly run warns only
+            [ "$GITHUB_EVENT_NAME" = schedule ] || exit 1
           }

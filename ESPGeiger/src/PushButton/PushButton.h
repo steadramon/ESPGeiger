@@ -21,10 +21,11 @@
 #define PUSHBUTTON_H
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/System/Globals.h"
-#include "Counter/Counter.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "App/AppConfig.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Module/Registry.h"
+#include "App/Topics.h"
+#include "Corium/Prefs/Prefs.h"
 
 #ifndef PUSHBUTTON_PIN
   #ifdef ESP32
@@ -37,24 +38,25 @@
 #define PUSHBUTTON_PIN2 -1
 #endif
 
-class PushButton : public EGModule {
+// active low
+class PushButton : public corium::Module {
   public:
     PushButton();
     const char* name() override { return PSTR("btn"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint16_t warmup_seconds() override { return 0; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
     void loop(unsigned long now) override;
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 50; }
+    // Emitted from loop(). A long press is only sent when something listens for it
+    static constexpr uint8_t TOPIC_PRESS = Topic::PRESS;
+    static constexpr uint8_t TOPIC_BACK  = Topic::BACK;
+    static constexpr uint8_t TOPIC_LONG  = Topic::LONG;
     void begin() override;
     void init();
     bool isPressed();
-    bool is_active();
     void set_pin(int pin);
     void set_pin2(int pin);
 #ifndef BTN_PIN_BLOCKED
-    const EGPrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
 #endif
 };
 

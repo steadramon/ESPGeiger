@@ -21,22 +21,30 @@
 #define ESPGEIGER_TICKCLOCK_H
 
 #include <stdint.h>
-#include <time.h>
 
-// time() once a minute and up to the boundary, +1 a tick between;
-// an ntp step lands within the minute
+// Reads time() once a minute and on the boundary, adds 1 each tick in between.
+// An NTP step shows up within the minute
 struct TickClock {
   static constexpr uint8_t READ_EVERY = 60;
-  time_t  now = 0;
-  uint8_t age = 0;
+  uint32_t now = 0;
+  uint8_t  left = 0;   // 0 = read time() next
 
-  // boundary 0 = not known yet, read is time()
-  time_t step(time_t boundary, time_t (*read)(time_t*)) {
-    if (now && ++age < READ_EVERY && now + 1 < boundary) return ++now;
-    age = 0;
-    now = read(nullptr);
-    return now;
+  // Returns false when a read is due
+  bool count() {
+    if (!left) return false;
+    left--;
+    now++;
+    return true;
   }
+
+  // after the boundary moved
+  void read(uint32_t t, uint32_t boundary) {
+    now = t;
+    uint32_t to = (int32_t)(boundary - t) > 0 ? boundary - t : 1;   // over the 2106 wrap too
+    left = to < READ_EVERY ? (uint8_t)(to - 1) : READ_EVERY - 1;
+  }
+
+  void read_next() { left = 0; }
 };
 
 #endif

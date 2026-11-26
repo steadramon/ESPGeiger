@@ -19,41 +19,49 @@
 #ifndef NEOPIXEL_h
 #define NEOPIXEL_h
 #ifdef GEIGER_NEOPIXEL
+#include "Corium/Output/Buzzer.h"
+#if BUZZER_BUILT
+#error "NeoPixel and the buzzer both use RMT channel 0"
+#endif
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
 #include <NeoPixelBus.h>
-#include "Counter/Counter.h"
-#include "Corium/Module/EGModule.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Module/Module.h"
+#include "Corium/Prefs/Prefs.h"
+#include "Corium/Platform/Chip.h"
 
 #ifndef NEOPIXEL_PIN
 #define NEOPIXEL_PIN 15
 #endif
 
 // esp32 uses RMT channel 0
-#ifdef ESP32
+#if CORIUM_HAS_RMT
   typedef NeoPixelBus<NeoGrbFeature, NeoEsp32Rmt0Ws2812xMethod> NeoController;
 #else
   typedef NeoPixelBus<NeoGrbFeature, NeoEsp8266BitBangWs2812xMethod> NeoController;
 #endif
 
-class NeoPixel : public EGModule {
+class NeoPixel : public corium::Module {
   public:
     NeoPixel();
     const char* name() override { return PSTR("neopx"); }
-    uint8_t display_order() override { return 16; }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint16_t warmup_seconds() override { return 0; }
-    void pre_wifi() override { setup(); }
-    const EGPrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    uint8_t displayOrder() override { return 16; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
+    void preWifi() override { setup(); }
+    void begin() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
+    corium::LegacyRows legacyAliases() override;
     void loop(unsigned long now) override;
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 30; }
+    static constexpr uint16_t LOOP_MS = 30;
+    static constexpr uint16_t FAST_LOOP_MS = 10;
+    static constexpr uint16_t FLASH_MS = 334;   // 3 flashes a second at most
+    static constexpr uint16_t WARN_MS = 80;
+    static constexpr uint16_t ALERT_MS = 200;
     void setup();
-    void blink(uint16_t timer);
-    void setBrightness(int input);
+    void park();   // safe mode only
+    void blink(uint16_t ms);   // lit for ms
+    void setBrightness(int pct);
     RgbColor color(uint8_t r, uint8_t g, uint8_t b);
     const uint16_t PixelCount = 1;
     int8_t _pin = NEOPIXEL_PIN;   // -1 = none
@@ -64,19 +72,25 @@ class NeoPixel : public EGModule {
     uint8_t  _blip_b = 0;
     uint8_t  _fade_rate = 0;     // 0=off, 1=fast, 2=medium, 3=slow
   protected:
-    NeoController* controller_{nullptr};
+    NeoController* _bus{nullptr};
   private:
     void precompute_blip();
     RgbColor trend_color();
-    RgbColor alarm_color(RgbColor rgb);
-    unsigned long onTime = 0;
-    unsigned long offTime = 0;
-    unsigned long blinkInterval = 2000;
-    unsigned long nextInterval = 2000;
-    unsigned long last_blip = 0;
-    int colorSaturation = 15;
+    RgbColor alarm_color(RgbColor rgb, uint16_t& ms);
+    void flash(unsigned long now);
+    unsigned long _on_ms = 0;
+    unsigned long _lit_ms = 0;
+    unsigned long _blink_ms = 2000;
+    unsigned long _next_ms = 2000;
+    static void on_click(uint32_t us);
+    bool _blip = false;
+    bool _rest = false;   // last flash was under FLASH_MS ago
+    int _level = 15;
     bool _is_off = true;
     bool _swap_rg = false;
+    bool _no_counts = false;   // cpm and cpm5 both under 0.01, checked each loop
 };
+
+extern NeoPixel neopixel;
 #endif
 #endif

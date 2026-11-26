@@ -18,128 +18,231 @@
 */
 #ifdef RADMONOUT
 #include "Radmon.h"
+#include <stdarg.h>
 #include <EGFormat.h>
 #include "Corium/Logger/Logger.h"
 #include "Corium/Util/Words.h"
 #include <EGEscape.h>
-#include "Corium/Module/EGModuleRegistry.h"
-#include "Corium/Measure/EGMeasure.h"
+#include "Corium/Module/Registry.h"
+#include "Corium/Measure/Measure.h"
+#include "Counter/CounterUpload.h"
+#include "App/AppKeys.h"
+#include "App/FeatureBits.h"
+#include "App/MeasureIds.h"
+#include "Counter/Counter.h"
+#include "Corium/System/DeviceInfo.h"
 
 Radmon radmon;
-EG_REGISTER_MODULE(radmon)
+CORIUM_REGISTER_FEATURE(radmon, FEAT_RADMON)
 
-EG_PSTR(M_WARM,   "warm");
-EG_PSTR(M_CPM_ST, "cpm_st");
-EG_PSTR(M_CPM5,   "cpm5");
-EG_PSTR(M_CPM15,  "cpm15");
-
-EG_PSTR(RM_H_EN,  "Upload to radmon.org");
-EG_PSTR(RM_L_USR, "Username");
-EG_PSTR(RM_H_INT, "Upload interval (sec)");
+CORIUM_PSTR(RM_H_EN,  "Upload to radmon.org");
+CORIUM_PSTR(RM_L_USR, "Username");
+CORIUM_PSTR(RM_K_HDR, "_send_hdr");
+CORIUM_PSTR(RM_L_HDR, "Also send");
+CORIUM_PSTR(RM_K_LOC, "loc");
+CORIUM_PSTR(RM_L_LOC, "Location");
+CORIUM_PSTR(RM_H_LOC, "The System location");
+CORIUM_PSTR(RM_K_FUZ, "loc_fuzz");
+CORIUM_PSTR(RM_L_FUZ, "Fuzz location");
+CORIUM_PSTR(RM_H_FUZ, "To about 1 km, else 100 m");
+CORIUM_PSTR(RM_K_FAC, "factor");
+CORIUM_PSTR(RM_L_FAC, "Conversion factor");
+CORIUM_PSTR(RM_H_FAC, "1 / ratio");
+CORIUM_PSTR(RM_K_ALR, "alerts");
+CORIUM_PSTR(RM_L_ALR, "Warn/alert");
+CORIUM_PSTR(RM_H_ALR, "Warning and Alert CPM, both 0 = alerts off");
 
 
 #define RADMON_USER_MAX 32
 #define RADMON_PASS_MAX 64
 
-static const EGPref RADMON_PREF_ITEMS[] PROGMEM = {
-  {EG_K_SEND,     EG_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  EGP_BOOL,   0},
-  {EG_K_USER,     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  RADMON_USER_MAX, EGP_STRING, 0},
-  {EG_K_PASSWORD, EG_L_PWD, nullptr,  "",   nullptr, 0, 0,  RADMON_PASS_MAX, EGP_STRING, EGP_SENSITIVE},
-  {EG_K_INTERVAL, EG_L_INT, RM_H_INT, STR(RADMON_INTERVAL), nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, EGP_UINT, EGP_ADVANCED},
+static const corium::Pref RADMON_PREF_ITEMS[] PROGMEM = {
+  {EG_K_SEND,     EG_L_EN,  RM_H_EN,  "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   0},
+  {EG_K_USER,     RM_L_USR, nullptr,  "",   nullptr, 0, 0,  RADMON_USER_MAX, corium::P_STRING, 0},
+  {EG_K_PASSWORD, EG_L_PWD, nullptr,  "",   nullptr, 0, 0,  RADMON_PASS_MAX, corium::P_STRING, corium::P_SENSITIVE},
+  {RM_K_HDR,      RM_L_HDR, nullptr,  nullptr, nullptr, 0, 0, 0, corium::P_LABEL, 0},
+  {RM_K_LOC,      RM_L_LOC, RM_H_LOC, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   corium::P_INLINE},
+  {RM_K_FAC,      RM_L_FAC, RM_H_FAC, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   corium::P_INLINE},
+  {RM_K_ALR,      RM_L_ALR, RM_H_ALR, "0",  nullptr, 0, 0,  0,  corium::P_BOOL,   corium::P_INLINE},
+  {RM_K_FUZ,      RM_L_FUZ, RM_H_FUZ, "1",  nullptr, 0, 0,  0,  corium::P_BOOL,   corium::P_ADVANCED},
+  {EG_K_INTERVAL, EG_L_INT, EG_H_INT, STR(RADMON_INTERVAL), nullptr, RADMON_INTERVAL_MIN, RADMON_INTERVAL_MAX, 0, corium::P_UINT, corium::P_ADVANCED},
 };
 
-static const EGPrefGroup RADMON_PREF_GROUP PROGMEM = {
+static const corium::PrefGroup RADMON_PREF_GROUP PROGMEM = {
   "radmon", "Radmon", 1,
   RADMON_PREF_ITEMS,
   sizeof(RADMON_PREF_ITEMS) / sizeof(RADMON_PREF_ITEMS[0]),
-  EGP_CAT_UPLOAD, EG_K_SEND,
+  corium::P_CAT_UPLOAD, EG_K_SEND, 0,
 };
 
-const EGPrefGroup* Radmon::prefs_group() { return &RADMON_PREF_GROUP; }
+const corium::PrefGroup* Radmon::prefsGroup() { return &RADMON_PREF_GROUP; }
 
-// === LEGACY IMPORT (remove after v1.0.0) ===
-static const EGLegacyAlias RADMON_LEGACY[] PROGMEM = {
+// legacy import
+static const corium::LegacyAlias RADMON_LEGACY[] PROGMEM = {
   {"radmonSend", "send"},
   {"radmonUser", "user"},
   {"radmonKey",  "password"},
   {"radmonTime", "interval"},
   {},
 };
-EGLegacyRows Radmon::legacy_aliases() { return RADMON_LEGACY; }
-// === END LEGACY IMPORT ===
+corium::LegacyRows Radmon::legacyAliases() { return RADMON_LEGACY; }
 
 Radmon::Radmon() {
-  pingIntervalMs = (uint32_t)RADMON_INTERVAL * 1000UL;
+  _every_ms = (uint32_t)RADMON_INTERVAL * 1000UL;
 }
 
 void Radmon::setInterval(int interval) {
-  if (interval == pingInterval) {
-    return;
-  }
-  if (interval > RADMON_INTERVAL_MAX) {
-    interval = RADMON_INTERVAL_MAX;
-  }
-  if (interval < RADMON_INTERVAL_MIN) {
-    interval = RADMON_INTERVAL_MIN;
-  }
-  pingInterval = interval;
-  pingIntervalMs = (uint32_t)interval * 1000UL;
+  _interval_s = setIntervalS(interval);
 }
 
 int Radmon::getInterval() {
-  return pingInterval;
+  return _interval_s;
 }
 
-void Radmon::on_prefs_loaded() {
-  int rtimer = (int)EGPrefs::getUInt("radmon", EG_K_INTERVAL);
-  if (rtimer == 0) rtimer = RADMON_INTERVAL;
-  setInterval(rtimer);
-  set_enabled(EGPrefs::getBool("radmon", EG_K_SEND));
+void Radmon::onPrefsLoaded() {
+  setInterval((int)corium::Prefs::getUInt("radmon", EG_K_INTERVAL));
+  HttpPoster::onPrefsLoaded();
 }
 
+// "OK<br>" on success, else the error text
 bool Radmon::interpret(const char* r)
 {
+  if (_set) {   // any 200
+    corium::Log::console(_set == 1 ? PSTR("Radmon: Location sent") :
+                         _set == 2 ? PSTR("Radmon: Factor sent") :
+                         _set == 3 ? PSTR("Radmon: Warn/alert sent") :
+                         _set == 4 ? PSTR("Radmon: Alerts on") : PSTR("Radmon: Alerts off"));
+    return true;
+  }
   if (strcmp_P(r, PSTR("OK<br>")) == 0) {
-    Log::debug(PSTR("Radmon: Upload OK"));
+    corium::Log::debug(PSTR("Radmon: Upload OK"));
     return true;
   } else if (strstr_P(r, PSTR("Incorrect"))) {
-    Log::console(PSTR("Radmon: Password incorrect, please check"));
+    corium::Log::console(PSTR("Radmon: Password incorrect"));
   } else if (strstr_P(r, PSTR("register"))) {
-    Log::console(PSTR("Radmon: Username incorrect, please check"));
+    corium::Log::console(PSTR("Radmon: Username incorrect"));
   } else if (strstr_P(r, PSTR("Too soon"))) {
-    Log::console(PSTR("Radmon: Rate limited"));
+    corium::Log::console(PSTR("Radmon: Rate limited"));
   } else {
-    Log::console(PSTR("Radmon: Unknown error"));
+    corium::Log::console(PSTR("Radmon: Unknown error"));
   }
   return false;
 }
 
+// once after boot and after a change, tried once
+bool Radmon::loc_due(float* lat, float* lon) {
+  if (!corium::Prefs::getBool("radmon", RM_K_LOC)) return false;
+  *lat = corium::Prefs::getFloat("loc", corium::K_LAT);
+  *lon = corium::Prefs::getFloat("loc", corium::K_LON);
+  if ((*lat == 0.0f && *lon == 0.0f) || (*lat == _lat && *lon == _lon)) return false;
+  _lat = *lat;
+  _lon = *lon;
+  return true;
+}
+
+// radmon.php?function=<fn>&user=..&password=.. then the tail
+static int url_of(char* url, size_t cap, PGM_P fn, const char* user, const char* pass, PGM_P tail, ...) {
+  char f[24] = {};
+  strncpy_P(f, fn, sizeof(f) - 1);   // %s can't read flash on the 8266
+  size_t n = snprintf_P(url, cap, PSTR("http://radmon.org/radmon.php?function=%s&user=%s&password=%s"), f, user, pass);
+  if (n < cap) {
+    va_list ap;
+    va_start(ap, tail);
+    n += vsnprintf_P(url + n, cap - n, tail, ap);
+    va_end(ap);
+  }
+  return (int)n;
+}
+
+// 3 dp. Fuzzed: 2 dp, the third from the chip so a station sits apart in its cell, as StationsAPI does
+static void loc_text(char* out, size_t cap, float v, uint32_t h, int32_t lim, bool fuzz) {
+  int32_t t = fuzz ? (int32_t)(v * 100.0f + (v >= 0 ? 0.5f : -0.5f)) * 10 + (int32_t)(h % 10) - 5
+                   : (int32_t)(v * 1000.0f + (v >= 0 ? 0.5f : -0.5f));
+  if (t > lim * 1000) t = lim * 1000;
+  if (t < -lim * 1000) t = -lim * 1000;
+  format_f(out, cap, t / 1000.0f, 3);
+}
+
+// once after boot and after a change, each tried once. -1 = none due
+int Radmon::setting(char* url, size_t cap, const char* user, const char* pass) {
+  float lat, lon;
+  if (loc_due(&lat, &lon)) {
+    char la[12], lo[12];
+    uint32_t h = corium::DeviceInfo::chipHash();
+    bool fuzz = corium::Prefs::getBool("radmon", RM_K_FUZ);
+    loc_text(la, sizeof(la), lat, h, 90, fuzz);
+    loc_text(lo, sizeof(lo), lon, h / 10, 180, fuzz);
+    _set = 1;
+    return url_of(url, cap, PSTR("setlatitudelongitude"), user, pass, PSTR("&latitude=%s&longitude=%s"), la, lo);
+  }
+  float r = gcounter.get_ratio();
+  if (corium::Prefs::getBool("radmon", RM_K_FAC) && r > 0 && r != _ratio) {
+    _ratio = r;
+    char v[12];
+    format_f(v, sizeof(v), 1.0f / r, 6);
+    _set = 2;
+    return url_of(url, cap, PSTR("setconversionfactor"), user, pass, PSTR("&value=%s"), v);
+  }
+  return corium::Prefs::getBool("radmon", RM_K_ALR) ? alerts(url, cap, user, pass) : -1;
+}
+
+// both set = the levels then alerts on, both 0 = alerts off, one 0 = nothing
+int Radmon::alerts(char* url, size_t cap, const char* user, const char* pass) {
+  int w = gcounter.get_warning(), a = gcounter.get_alert();
+  bool changed = w != _warn || a != _alert;
+  _warn = w;
+  _alert = a;
+  if (w > 0 && a > 0) {
+    if (changed) {
+      _on_due = true;
+      _set = 3;
+      return url_of(url, cap, PSTR("setwarnalert"), user, pass, PSTR("&warn=%u&alert=%u"), (unsigned)w, (unsigned)a);
+    }
+    if (!_on_due) return -1;
+    _on_due = false;
+    _set = 4;
+    return url_of(url, cap, PSTR("setalertsenabled"), user, pass, PSTR(""));
+  }
+  _on_due = false;
+  if (!changed) return -1;
+  if (w || a) {
+    corium::Log::console(PSTR("Radmon: Warn/alert need both set, not sent"));
+    return -1;
+  }
+  _set = 5;
+  return url_of(url, cap, PSTR("setalertsdisabled"), user, pass, PSTR(""));
+}
+
 bool Radmon::prepare(char* url, size_t cap, const char** /*body*/) {
-  if (!egm_b(M_WARM)) return false;
+  _set = 0;
+  const char* raw_user = corium::Prefs::getString("radmon", EG_K_USER);
+  const char* raw_pass = corium::Prefs::getString("radmon", EG_K_PASSWORD);
+  if (unset(raw_user, RM_L_USR) || unset(raw_pass, EG_L_PWD)) return false;
+  if (!upload_ready(logTag())) return false;
 
-  if (GEIGER_IS_TEST(GEIGER_TYPE)) {
-    Log::console(PSTR("Radmon: Testmode"));
-    return false;
-  }
+  corium::Log::debug(PSTR("Radmon: Uploading latest data ..."));
 
-  const char* _api_user = EGPrefs::getString("radmon", EG_K_USER);
-  const char* _api_key  = EGPrefs::getString("radmon", EG_K_PASSWORD);
-  if (_api_user[0] == '\0' || _api_key[0] == '\0') {
-    Log::console(PSTR("Radmon: Skipping upload, please set username and password"));
-    return false;
-  }
-
-  Log::debug(PSTR("Radmon: Uploading latest data ..."));
-
+  // the average nearest the interval: 1, 5 or 15 min
   float avgcpm;
-  if      (pingInterval <= 90)  avgcpm = egm_f(M_CPM_ST);
-  else if (pingInterval <= 450) avgcpm = egm_f(M_CPM5);
-  else                          avgcpm = egm_f(M_CPM15);
-  char cpmbuf[12];
-  format_f(cpmbuf, sizeof(cpmbuf), avgcpm, 1);
+  if      (_interval_s <= 90)  avgcpm = gcounter.get_cpmf_stable();
+  else if (_interval_s <= 450) avgcpm = gcounter.get_cpm5f();
+  else                         avgcpm = gcounter.get_cpm15f();
+  char value[12];
+  format_f(value, sizeof(value), avgcpm, 1);
   char user[3 * RADMON_USER_MAX + 1], pass[3 * RADMON_PASS_MAX + 1];
-  egesc_url(user, sizeof(user), _api_user);
-  egesc_url(pass, sizeof(pass), _api_key);
-  return url_fits(snprintf_P(url, cap, RADMON_URI, user, pass, cpmbuf), cap);
+  egesc_url(user, sizeof(user), raw_user);
+  egesc_url(pass, sizeof(pass), raw_pass);
+  bool read = _read_next;
+  _read_next = false;
+  int n = read ? -1 : setting(url, cap, user, pass);
+  if (n >= 0) {
+    if (urlFits(n, cap)) {
+      _again = true;   // the reading right after, the next setting next slot
+      _read_next = true;
+      return true;
+    }
+    _set = 0;
+  }
+  return urlFits(url_of(url, cap, PSTR("submit"), user, pass, PSTR("&value=%s&unit=CPM"), value), cap);
 }
 #endif

@@ -1,5 +1,5 @@
 /*
-  TickProfile.h - sTickerCB timing + loop iteration counter.
+  TickProfile.h - Reactor::second timing + loop iteration counter.
 
   Copyright (C) 2026 @steadramon
 
@@ -16,33 +16,38 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef UTIL_TICKPROFILE_H
-#define UTIL_TICKPROFILE_H
+#ifndef CORIUM_TICKPROFILE_H
+#define CORIUM_TICKPROFILE_H
 
 #include <Arduino.h>
 
-// loop and the tick only, esp32 runs the tick on loop too: no volatile
+namespace corium {
+// Only touched by the loop and the tick, so no volatile
 namespace TickProfile {
-  extern uint32_t tick_us;
-  extern uint32_t tick_max_us;  // 60s
+  extern uint32_t tickUs;
+  extern uint32_t tickMaxUs;  // worst in 60 s
   extern uint32_t lps;
-  extern uint32_t lps_raw;
-  extern uint32_t _lps_count;    // free-running, never reset
+  extern uint32_t lpsRaw;
+  extern uint32_t _lps_count;    // Free-running, never reset
 
   inline void countIter() { ++_lps_count; }
 
 #ifdef LOOP_PROFILE
-  extern uint32_t loop_body_us;
-  inline void addLoopBody(uint32_t us) { loop_body_us += us; }
+  extern uint32_t loopBodyUs;
+  extern uint32_t loopMaxUs;   // Worst pass
+  inline void addLoopBody(uint32_t us) {
+    loopBodyUs += us;
+    if (us > loopMaxUs) loopMaxUs = us;
+  }
 #endif
 
   void beginTick();
 #ifdef TICK_PROFILE
-  void markCounter();
+  void markApp();
   void markWifi();
-  void markModules();
 #endif
-  void endTick();
+  bool endTick();   // true once a minute
 }
+}  // namespace corium
 
 #endif

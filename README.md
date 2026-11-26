@@ -4,14 +4,14 @@
 
 ESPGeiger is an open-source project that turns an ESP8266 or ESP32 into an IoT-connected Geiger counter. It collects, calculates and reports radiation levels from a range of Geiger counters with pulse or serial outputs.
 
-- 😃  Easy to install via web browser - no compiler required
+- 😃  Installs from a web browser - no compiler required
 - 📈  Built-in web portal with live graphing and 24-hour history
-- 🔴  Live CPM and μSv/h with 1, 5 and 15-minute smoothed averages
-- 🕰️   Lifetime tracking - persistent total clicks and μSv across reboots
-- 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED and WS2812X NeoPixel status light
+- 🔴  Live CPM and µSv/h with 1, 5 and 15-minute smoothed averages
+- 🕰️   Lifetime tracking - persistent total clicks and µSv across reboots
+- 🖥️   Optional SSD1306 / SSD1309 / SH1106 OLED (128x64 or 128x32) and WS2812X NeoPixel status light
 - 🌡️   Optional BME280 / BMP280 / AHT environmental sensors - auto-detected over I2C
-- ✅  Works with pulse and GC10 / GC10next / MightyOhm serial counters
-- 📟  Accurate counting via interrupt or ESP32 hardware counter (PCNT)
+- ✅  Works with pulse and GC10 / GC10next / MightyOhm / ESPGeiger serial counters, or any that sends its CPM in a line
+- 📟  Counting by interrupt or the ESP32 hardware counter (PCNT)
 - 🎛️   Configurable noise filtering and debounce
 - 🌐  MQTT and Home Assistant auto-discovery, Radmon.org, GMCMAP, ThingSpeak, GeigerLog, custom Webhooks
 - 📡  UDP / OSC broadcast and receiver builds - mirror clicks to a tubeless ESP, or feed PD / TouchDesigner / Node-RED
@@ -28,7 +28,7 @@ The easiest way to install ESPGeiger is the **Web Installer** - it runs in your 
 
 ### 👉 [https://install.espgeiger.com](https://install.espgeiger.com)
 
-Select your build from the dropdown and follow the on-screen instructions. Installation takes about two minutes.
+Select your build from the dropdown and follow the on-screen instructions. Installation takes about two minutes. An ESP32-S2 needs download mode for its first flash: hold 0, tap RST, let go of 0.
 
 ## Which Build Do I Need?
 
@@ -36,25 +36,38 @@ Pick the build that matches your hardware. If in doubt, start with **Pulse** - i
 
 ### I have an ESP + generic pulse Geiger counter
 
-| Hardware | Recommended Build |
-|---|---|
-| ESP8266 (Wemos D1 Mini, NodeMCU, etc.) | `esp8266_pulse` |
-| ESP8266 with SSD1306 OLED | `esp8266oled_pulse` |
-| ESP32 | `esp32_pulse` |
-| ESP32-S3 (dev kits) | `esp32s3_pulse` |
-| ESP32-S3 with onboard amp + speaker (XH-S3E-AI) | `xh_s3e_pulse` |
-| ESP32-C3 (RISC-V, no PCNT - software pulse counter) | `esp32c3_pulse` |
-| CAJOE IoT-GM | `esp32_cajoe_iotgm` |
+<!-- gen:builds only=esp8266_pulse,esp8266oled_pulse,esp32_pulse,esp32s3_pulse,xh_s3e_pulse,esp32c3_pulse,esp32s2_pulse,esp32_cajoe_iotgm cols=env,rx -->
 
-ESP32 / ESP32-S3 / ESP32-C3 builds bundle SSD1306 OLED support and auto-detect the panel at boot - no separate `oled_*` envs on the ESP32 family. ESP8266 still ships dedicated `esp8266oled_*` envs to avoid the runtime cost on the slower core.
+| Hardware | Build | RX pin (default) |
+|---|---|---|
+| ESP8266 (Wemos D1 Mini, NodeMCU, etc.) | `esp8266_pulse` | 13 |
+| ESP8266 with SSD1306 OLED | `esp8266oled_pulse` | 13 |
+| ESP32 | `esp32_pulse` | 13 |
+| ESP32-S3 (dev kits) | `esp32s3_pulse` | 13 |
+| ESP32-S3 with onboard amp + speaker (XH-S3E-AI) | `xh_s3e_pulse` | 13 |
+| ESP32-C3 (RISC-V, no PCNT - software pulse counter) | `esp32c3_pulse` | 4 |
+| ESP32-S2 (S2 Mini, S2 Pico) | `esp32s2_pulse` | 13 |
+| CAJOE IoT-GM | `esp32_cajoe_iotgm` | 26, wired |
+
+<!-- /gen -->
+
+ESP32 / ESP32-S3 / ESP32-C3 / ESP32-S2 builds bundle SSD1306 OLED support and auto-detect the panel at boot - no separate `oled_*` envs on the ESP32 family. ESP8266 still ships dedicated `esp8266oled_*` envs to avoid the runtime cost on the slower core.
 
 ### I have an ESP + serial Geiger counter
 
-A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger). Select your counter type from the **Config** page after flashing.
+A single serial build supports all serial counter types (GC10, GC10Next, MightyOhm, ESPGeiger, Template). Select your counter type from the **Config** page after flashing.
 
-| ESP8266 Build | ESP32 Build | ESP32-S3 Build | ESP32-C3 Build |
-|---|---|---|---|
-| `esp8266_serial` | `esp32_serial` | `esp32s3_serial` | `esp32c3_serial` |
+<!-- gen:builds only=esp8266_serial,esp32_serial,esp32s3_serial,esp32c3_serial,esp32s2_serial cols=chip,env,rx -->
+
+| Chip | Build | RX pin (default) |
+|---|---|---|
+| ESP8266 | `esp8266_serial` | 13 |
+| ESP32 | `esp32_serial` | 13 |
+| ESP32-S3 | `esp32s3_serial` | 13 |
+| ESP32-C3 | `esp32c3_serial` | 4 |
+| ESP32-S2 | `esp32s2_serial` | 13 |
+
+<!-- /gen -->
 
 ESP8266 OLED variant: `esp8266oled_serial`. The ESP32 family bundles OLED so the same `esp32*_serial` envs work with or without a display.
 
@@ -73,8 +86,9 @@ Test builds emulate a Geiger counter internally. You can also wire the `TXPIN` o
 
 | Build | Description |
 |---|---|
-| `esp8266_test` / `esp32_test` / `esp32s3_test` | Internal counter, no output |
+| `esp8266_test` / `esp32_test` / `esp32s3_test` / `esp32c3_test` / `esp32s2_test` | Internal counter, no output |
 | `esp8266_testpulse` / `esp32_testpulse` | Outputs Poisson-distributed pulses on TXPIN |
+| `esp8266_testpulseint` / `esp32_testpulseint` | Outputs evenly timed (PWM) pulses on TXPIN, for high rates |
 | `esp8266_testserial` / `esp32_testserial` | Emulates a serial counter (type selectable via Config) |
 
 ### I want a remote display or fleet aggregator (no tube needed)
@@ -87,14 +101,15 @@ UDP receiver builds listen for OSC multicast broadcasts from other ESPGeiger dev
 | ESP32 | `esp32_udp` |
 | ESP32-C3 | `esp32c3_udp` |
 | ESP32-S3 | `esp32s3_udp` |
+| ESP32-S2 | `esp32s2_udp` |
 
-Producers enable the broadcast via Config → Local broadcast → mode 2. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
+Producers turn on the broadcast on the Config page: **Local Broadcast**, Mode **Telemetry + per-click**. See [UDP / OSC Output](https://docs.espgeiger.com/output/udp) for the full protocol.
 
 See the full list of available builds on the [releases page](https://github.com/steadramon/ESPGeiger/releases/latest) or in the [build targets documentation](https://docs.espgeiger.com/install/buildtargets).
 
 ## Hardware Connection
 
-By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32 and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin. Don't forget a common ground.
+By default `GEIGER_RXPIN` is set to GPIO13 on ESP8266 / ESP32 / ESP32-S2 / ESP32-S3 and GPIO4 on ESP32-C3 (GPIO 11-17 are bonded to internal flash on C3-MINI-1 modules and cannot be used). Connect your Geiger counter's pulse or serial TX output to this pin; the tables above give it for each build. Don't forget a common ground.
 
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/D1mini-basicwiring.png" width="50%"/>
 <img src="https://raw.githubusercontent.com/steadramon/ESPGeiger/main/docs/img/cajoe-wemosd1.jpg" width="50%"/>
@@ -142,7 +157,8 @@ If you want to customise the firmware or create a build for unsupported hardware
 
 - GC10 / GC10-Next
 - MightyOhm
-- ESPGeiger-HW
+- ESPGeiger (`CPM: 60` lines)
+- Template: any counter that sends its CPM in a line
 
 Other serial-based counters should be supportable with small additions to the codebase. If you have one not listed, please [raise an issue](https://github.com/steadramon/ESPGeiger/issues).
 
@@ -160,18 +176,21 @@ Contributions are welcome - please feel free to raise a Pull Request or open an 
 
 Supporting libraries:
 - [ArduinoJson](https://github.com/bblanchon/ArduinoJson)
-- [AsyncTCP](https://github.com/ESP32Async/AsyncTCP) / [ESPAsyncTCP](https://github.com/ESP32Async/ESPAsyncTCP)
-- [async-mqtt-client](https://github.com/marvinroger/async-mqtt-client)
-- [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic)
 - [U8g2](https://github.com/olikraus/u8g2)
-- [JLed](https://github.com/jandelgado/jled)
 - [NeoPixelBus](https://github.com/Makuna/NeoPixelBus)
 - [EspSoftwareSerial](https://github.com/plerup/espsoftwareserial)
 - [SdFat](https://github.com/greiman/SdFat)
 - [micro-ecc](https://github.com/kmackay/micro-ecc)
+- [Improv sdk-cpp](https://github.com/improv-wifi/sdk-cpp) (WiFi setup over USB)
 - [CircularBuffer](https://github.com/rlogiacco/CircularBuffer)
 - [base64_arduino](https://github.com/Densaugeo/base64_arduino) (basis for the bundled EGBase64)
 - [ESPNtpClient](https://github.com/gmag11/ESPNtpClient) (uptime tracking, now inlined)
+
+Earlier versions used:
+- [AsyncTCP](https://github.com/ESP32Async/AsyncTCP) / [ESPAsyncTCP](https://github.com/ESP32Async/ESPAsyncTCP)
+- [async-mqtt-client](https://github.com/marvinroger/async-mqtt-client)
+- [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic)
+- [JLed](https://github.com/jandelgado/jled)
 
 Inspiration:
 - [OpenMQTTGateway](https://github.com/1technophile/OpenMQTTGateway)

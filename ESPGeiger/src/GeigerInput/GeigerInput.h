@@ -21,8 +21,11 @@
 #ifndef GEIGERINPUT_H
 #define GEIGERINPUT_H
 #include <Arduino.h>
-#include "Corium/System/Globals.h"
-#include "Corium/Measure/EGMeasure.h"
+#include <atomic>
+#include "App/AppConfig.h"
+#include "Corium/System/FastMillis.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/System/IsrLock.h"
 
 // GEIGER_TYPE bits, test builds >= 128
 #define GEIGER_FLAG_PULSE   0x01
@@ -46,20 +49,41 @@
 #define GEIGER_IS_TEST(t)    ((t) & GEIGER_FLAG_TEST)
 #define GEIGER_HAS_INTPWM(t) ((t) & GEIGER_FLAG_INTPWM)
 
-#ifdef ESP32
-#include <soc/soc_caps.h>
-#endif
+#include "Corium/Platform/Chip.h"
 
 // TXPULSE counts internal pulses, C3 has no PCNT
-#if defined(ESP32) && SOC_PCNT_SUPPORTED && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(IGNORE_PCNT) && !defined(GEIGER_COUNT_TXPULSE)
+#if CORIUM_HAS_PCNT && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(IGNORE_PCNT) && !defined(GEIGER_COUNT_TXPULSE)
 #define USE_PCNT
 #endif
 
-// esp8266 test pulses count in loop()
-#if defined(ESP8266) && GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#ifdef USE_PCNT
+#define PCNT_PULL_FLOATING 0
+#define PCNT_PULL_UP       1
+#define PCNT_PULL_DOWN     2
+// Floating by default, a pull-up holds a Cajoe's INT high (#2, #21)
+#if defined(PCNT_PULLUP_PIN)
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_UP
+#elif defined(PCNT_PULLDOWN_PIN)
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_DOWN
+#else
+#define PCNT_PIN_PULL_DEFAULT PCNT_PULL_FLOATING
+#endif
+#endif
+
+// pulse builds link both, a pref picks one at boot
+#if defined(USE_PCNT) && !GEIGER_IS_TEST(GEIGER_TYPE)
+#define PCNT_SELECTABLE
+#endif
+
+// Real pulse builds count in the ISR. Test pulses count in loop() and pcnt is polled
+#if GEIGER_IS_PULSE(GEIGER_TYPE) && !GEIGER_IS_TEST(GEIGER_TYPE) && !defined(USE_PCNT)
 #define GEIGER_COUNTS_IN_ISR
-#elif defined(ESP32) && GEIGER_IS_PULSE(GEIGER_TYPE) && !defined(USE_PCNT)
-#define GEIGER_COUNTS_IN_ISR
+#endif
+
+// Test counts are made in code, so no rx row and no pin held (a board's wired pin still is)
+#if GEIGER_TYPE == GEIGER_TYPE_TEST && !defined(RXPIN_BLOCKED)
+  #define RXPIN_BLOCKED
+  #define RXPIN_UNUSED
 #endif
 
 // no tube, no click pin
@@ -101,6 +125,7 @@
 #define GEIGER_RXPIN 13
 #endif
 
+// us, closer pulses are dropped
 #ifndef GEIGER_DEBOUNCE
 #define GEIGER_DEBOUNCE 200
 #endif
@@ -110,18 +135,18 @@ extern volatile uint32_t s_event_counter;   // isr writes, loop reads and clears
 
 extern volatile unsigned long _debounce;
 
-#ifdef ESP32
-extern portMUX_TYPE timerMux;
-#endif
+extern corium::IsrLock::Mux timerMux;
 
 class EGHttpResponse;
 class EGHttpServer;
 
+// one built per GEIGER_TYPE
 class GeigerInput {
   public:
     virtual ~GeigerInput() {};
-    virtual void loop();
+    virtual void loop() {}
     virtual void secondTicker();
+    // Counts since the last call, called from the second tick
     virtual int collect();
     virtual void begin();
     void set_debounce(int debounce) {
@@ -139,42 +164,58 @@ class GeigerInput {
     virtual void apply_pcnt_filter() {};
     virtual void set_pin_pull(int mode) {};   // 0=floating, 1=up, 2=down
     virtual bool has_pcnt() { return false; }
+#ifdef PCNT_SELECTABLE
+    virtual void use_pcnt(bool) {}   // before begin
+#endif
     virtual bool isHealthy() const { return true; }
-    virtual uint32_t last_data_ms() const { return (uint32_t)(_last_blip / 1000UL); }
+    bool stormy() const { return _stormy; }       // parked or dropping
+    bool chattering() const { return _chatter; }  // isr builds, Chatter.h
     virtual void registerRoutes(EGHttpServer&) {}
-    virtual EGMeasureRows measurements() { return EGMeasureRows(); }
+    virtual corium::MeasureRows measurements() { return corium::MeasureRows(); }
     virtual void appendClicksExtra(EGHttpResponse&) {}
     virtual uint32_t boundary_seconds() const { return 3600; }   // 60 in test
     virtual void stopForOTA() {}
     virtual void restartAfterOTA() {}
     void blip_led();
     unsigned long last_blip() const { return _last_blip; }
-    static void IRAM_ATTR countInterrupt();
-    // main code only, interrupts off
+    static void CORIUM_ISR_ATTR countInterrupt();
+    // main code only, with interrupts off
     static void countAt(unsigned long us);
+    // A second over this is junk, ~600x any real tube
+    static constexpr uint32_t STORM_COUNTS = 10000;
+    // once a second, parks the pin over STORM_COUNTS isr/s
     void checkIsrStorm();
+    void stopIsr();
+    void restartIsr();
     void setCounter(int val, bool update = true);
     void setLastBlip();
-    // inline gate
-    bool poll_due() {
-      if (_poll_c < _poll_skip) {
-        _poll_c++;
-        return false;
-      }
-      _poll_c = 0;
-      return true;
+    // Inline gate, true when posted or the poll time came
+#ifdef GEIGER_COUNTS_IN_ISR
+    bool due(uint32_t) const { return false; }   // isr counts, nothing to poll
+#else
+    bool due(uint32_t now) const {
+#if GEIGER_IS_TEST(GEIGER_TYPE)
+      // Only test timers post, so only test builds pay a memw a pass for the atomic
+      if (s_posted.load(std::memory_order_relaxed)) return true;
+#endif
+      return _polls && corium::reached(now, _poll_at);
     }
-  private:
-    void (*callback)(void) = nullptr;
+#endif
+    // Set on a test stamp, pulse or retarget. loop() takes it first, collect() sweeps the rest
+    static void post() { s_posted.store(true, std::memory_order_relaxed); }
+    static void take() { s_posted.store(false, std::memory_order_relaxed); }
   protected:
-    uint16_t _poll_c = 0;
-    uint16_t _poll_skip = 0;   // passes between polls
+    static std::atomic<bool> s_posted;
+    uint32_t _poll_at = 0;   // fastMillis()
+    bool     _polls = false;
 #ifdef GEIGER_TXPIN
     int _tx_pin = GEIGER_TXPIN;
 #else
     int _tx_pin = -1;
 #endif
     int _rx_pin = GEIGER_RXPIN;
+    bool _stormy = false;
+    bool _chatter = false;
 };
 
 #endif

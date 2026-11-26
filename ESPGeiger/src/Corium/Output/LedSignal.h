@@ -16,40 +16,55 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef LEDSIGNAL_H
-#define LEDSIGNAL_H
+#ifndef CORIUM_LEDSIGNAL_H
+#define CORIUM_LEDSIGNAL_H
 
 #include <stdint.h>
+#include <atomic>
+#include "App/AppConfig.h"
 
+// 0 = counts never flash this LED, the app has a pin of its own
+#ifndef CORIUM_LEDSIGNAL_FLASH
+#define CORIUM_LEDSIGNAL_FLASH 1
+#endif
+
+namespace corium {
 namespace LedSignal {
 
-  // poll() owns the pins, the rest queue for it
-  extern volatile uint8_t s_head;
-  extern volatile uint8_t s_tail;
+  // Only poll() touches the pins, everything else queues for it
+  extern std::atomic<uint8_t> s_head;
+  extern std::atomic<uint8_t> s_tail;
   extern bool s_busy;
-  inline bool due() { return s_head != s_tail || s_busy; }
+  inline bool due() {
+    return s_head.load(std::memory_order_acquire) != s_tail.load(std::memory_order_acquire) || s_busy;
+  }
 
-  void begin();
-  void use_pin(int pin, bool low_active);   // led.pin, -1 = none
-  void attach();           // last in setup()
-  void poll(uint32_t now_us);
+  // A row of the app's table, same args as blinkN
+  struct Pattern {
+    uint16_t onMs;
+    uint16_t offMs;
+    uint8_t  count;
+  };
+
+  // rows in PROGMEM, flash_led = counts flash this LED
+  void begin(const Pattern* rows, uint8_t count, bool flash_led);
+  void usePin(int pin, bool low_active);   // led.pin, -1 = none
+  void attach();           // Last in setup()
+  void poll();
   void off();
-  void lit(bool on);   // steady
+  void lit(bool on);   // Steady
 
-  // caller checks enable and quiet hours
-  void click();
+#if CORIUM_LEDSIGNAL_FLASH
+  // Caller checks enable and quiet hours
+  void flash();
+  // engine_mode is a PulseEngine::Mode, the caller maps the UI value
+  void setFlashConfig(uint8_t engine_mode, uint16_t pulse_us, uint8_t fade_shift_idx);
+#endif
 
-  void activity();
-
-  void shortPressAck();
-  void displayEnabled();
-  void displayDisabled();
+  void play(uint8_t row);   // Past the end = nothing
 
   void setBrightness(uint8_t level);
-
-  // PulseEngine::Mode, caller maps the UI value
-  void setBlipEngineConfig(uint8_t engine_mode, uint16_t pulse_us,
-                           uint8_t fade_shift_idx, uint8_t max_hz);
 }
+}  // namespace corium
 
 #endif

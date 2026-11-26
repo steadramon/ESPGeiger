@@ -28,10 +28,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 #include "pgmspace.h"
 
-// uint32_t so it wraps
+// us, millis() and micros() cut it to 32 bits so they wrap
 inline uint64_t& eg_clock_ref() { static uint64_t us = 0; return us; }
 
 inline uint32_t millis() { return (uint32_t)(eg_clock_ref() / 1000ULL); }
@@ -41,7 +42,13 @@ inline void delay(uint32_t ms)             { eg_clock_ref() += (uint64_t)ms * 10
 inline void delayMicroseconds(uint32_t us) { eg_clock_ref() += us; }
 // Counted, no yield in network callbacks
 inline uint32_t& eg_yield_count()          { static uint32_t n = 0; return n; }
-inline void yield()                        { eg_yield_count()++; }
+// the 8266 runs lwIP in yield, a test can too
+typedef void (*eg_yield_fn)();
+inline eg_yield_fn& eg_yield_hook()        { static eg_yield_fn f = nullptr; return f; }
+inline void yield() {
+  eg_yield_count()++;
+  if (eg_yield_hook()) eg_yield_hook()();
+}
 
 // eg_clock_reset() from setUp()
 inline void     eg_clock_reset()                 { eg_clock_ref() = 0; }
@@ -84,7 +91,7 @@ inline void detachInterrupt(uint8_t pin) {}
 inline void interrupts() {}
 inline void noInterrupts() {}
 
-typedef int portMUX_TYPE;   // NOLINT(mixed-case)
+typedef int portMUX_TYPE;
 #define portMUX_INITIALIZER_UNLOCKED 0
 #define portENTER_CRITICAL(m)         do { (void)(m); } while (0)
 #define portEXIT_CRITICAL(m)          do { (void)(m); } while (0)
@@ -149,6 +156,8 @@ inline void analogWrite(uint8_t pin, int val)      {}
 inline void tone(uint8_t pin, unsigned int freq, unsigned long dur = 0) {}
 inline void noTone(uint8_t pin)                    {}
 
+enum WDTO_t { WDTO_8S = 8000 };   // esp8266 Esp.h
+
 // 80 MHz
 class EspClass {
 public:
@@ -157,8 +166,18 @@ public:
   uint32_t getChipId() const           { return 0x00c0ffee; }
   uint32_t getMaxFreeBlockSize() const { return _max_block; }
   uint8_t  getHeapFragmentation() const { return 0; }
+  uint32_t getFreeContStack() const    { return 0; }
+  void     getHeapStats(uint32_t* f, uint16_t* m, uint8_t* fr) const {
+    *f = _free_heap; *m = (uint16_t)_max_block; *fr = 7;
+  }
+  uint32_t getMinFreeHeap() const      { return 18000; }   // esp32
+  uint32_t getMaxAllocHeap() const     { return _max_block; }   // esp32
   uint32_t getCpuFreqMHz() const       { return 80; }
   uint32_t getFlashChipSize() const    { return 4u * 1024u * 1024u; }
+  uint32_t getFlashChipRealSize() const { return 8u * 1024u * 1024u; }
+  uint8_t  getBootVersion() const      { return 31; }
+  uint32_t getSketchSize() const       { return 500000; }
+  uint32_t getFreeSketchSpace() const  { return 1000000; }
   void     wdtFeed() const             {}
   void     wdtDisable() const          {}
   void     wdtEnable(uint32_t) const   {}
@@ -169,11 +188,50 @@ public:
   void eg_set_free_heap(uint32_t v)      { _free_heap = v; }
   void eg_set_max_free_block(uint32_t v) { _max_block = v; }
 
+  // one nor sector at any address: erase = 0xFF, a write only clears bits
+  bool flashEraseSector(uint32_t sector) {
+    if (eg_flash_fail) return false;
+    memset(eg_flash, 0xFF, sizeof(eg_flash));
+    eg_flash_erases++;
+    return true;
+  }
+  bool flashWrite(uint32_t addr, const uint32_t* data, size_t size) {
+    if (eg_flash_fail || addr % 4 || size % 4 || addr % 4096 + size > sizeof(eg_flash)) return false;
+    const uint8_t* s = (const uint8_t*)data;
+    for (size_t i = 0; i < size; i++) eg_flash[addr % 4096 + i] &= s[i];
+    return true;
+  }
+  bool flashRead(uint32_t addr, uint32_t* data, size_t size) {
+    if (addr % 4 || size % 4 || addr % 4096 + size > sizeof(eg_flash)) return false;
+    memcpy(data, eg_flash + addr % 4096, size);
+    return true;
+  }
+  uint8_t eg_flash[4096];
+  uint32_t eg_flash_erases = 0;
+  bool eg_flash_fail = false;
+
+  // rtc user memory, 128 words
+  bool rtcUserMemoryRead(uint32_t offset, uint32_t* data, size_t size) {
+    if (size == 0 || offset * 4 + size > sizeof(eg_rtc)) return false;
+    memcpy(data, (uint8_t*)eg_rtc + offset * 4, size);
+    return true;
+  }
+  bool rtcUserMemoryWrite(uint32_t offset, const uint32_t* data, size_t size) {
+    if (size == 0 || offset * 4 + size > sizeof(eg_rtc)) return false;
+    memcpy((uint8_t*)eg_rtc + offset * 4, data, size);
+    return true;
+  }
+  uint32_t eg_rtc[128];
+
 private:
   uint32_t _free_heap = 40000;
   uint32_t _max_block = 20000;
   uint32_t _restarts  = 0;
 };
+
+#ifndef SPI_FLASH_SEC_SIZE
+#define SPI_FLASH_SEC_SIZE 4096
+#endif
 
 inline EspClass ESP;
 

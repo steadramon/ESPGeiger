@@ -17,6 +17,7 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Max7219Driver.h"
+#include "SevenSeg.h"
 
 void Max7219Driver::begin(int8_t din, int8_t clk, int8_t cs, uint8_t chips,
                           uint8_t decode, uint8_t scanlimit) {
@@ -70,20 +71,20 @@ void Max7219Driver::heal() {
   if (++_heal_row > _scan) _heal_row = 0;
 }
 
-// MSB first, no latch
+// MSB first
+void Max7219Driver::shiftByte(uint8_t b) {
+  for (uint8_t i = 0; i < 8; i++) {
+    digitalWrite(_din, (b & 0x80) ? HIGH : LOW);
+    b <<= 1;
+    digitalWrite(_clk, HIGH);
+    digitalWrite(_clk, LOW);
+  }
+}
+
+// shifts without latching
 void Max7219Driver::shiftFrame(uint8_t reg, uint8_t val) {
-  for (uint8_t i = 0; i < 8; i++) {
-    digitalWrite(_din, (reg & 0x80) ? HIGH : LOW);
-    reg <<= 1;
-    digitalWrite(_clk, HIGH);
-    digitalWrite(_clk, LOW);
-  }
-  for (uint8_t i = 0; i < 8; i++) {
-    digitalWrite(_din, (val & 0x80) ? HIGH : LOW);
-    val <<= 1;
-    digitalWrite(_clk, HIGH);
-    digitalWrite(_clk, LOW);
-  }
+  shiftByte(reg);
+  shiftByte(val);
 }
 
 static bool is_digit(uint8_t reg) {
@@ -125,20 +126,21 @@ void Max7219Driver::writeAll(uint8_t reg, uint8_t val) {
 
 void Max7219Driver::writeDigit(uint8_t index, uint8_t code, bool dp) {
   if (index > 7) return;
-  write(0, REG_DIGIT0 + index, (uint8_t)(code | (dp ? 0x80 : 0)));   // DP = bit 7
+  write(0, REG_DIGIT0 + index, (uint8_t)(code | (dp ? SEG_DP : 0)));
 }
 
-// FC-16: digits are rows; Generic: digits are columns, reversed; upside down
+// FC-16 digits are rows, Generic digits are columns reversed. Upside down
 // also runs the chain backwards
 static bool lit(const uint8_t* cols, uint16_t w, uint8_t p, uint8_t r, uint8_t i,
                 uint8_t orient) {
   uint16_t x;
   uint8_t  y;
   switch (orient) {
-    case 1:  x = p * 8 + 7 - r;         y = i;     break;   // Generic
-    case 2:  x = w - 1 - (p * 8 + i);   y = 7 - r; break;   // FC-16 upside down
-    case 3:  x = w - 8 - p * 8 + r;     y = 7 - i; break;   // Generic upside down
-    default: x = p * 8 + i;             y = r;     break;   // FC-16
+    case Max7219Driver::ORIENT_GENERIC:      x = p * 8 + 7 - r;         y = i;     break;
+    case Max7219Driver::ORIENT_FC16_FLIP:    x = w - 1 - (p * 8 + i);   y = 7 - r; break;
+    case Max7219Driver::ORIENT_GENERIC_FLIP: x = w - 8 - p * 8 + r;     y = 7 - i; break;
+    case Max7219Driver::ORIENT_FC16:
+    default:                                 x = p * 8 + i;             y = r;     break;
   }
   return cols[x] & (1 << y);
 }

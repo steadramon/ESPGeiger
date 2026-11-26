@@ -24,9 +24,10 @@
 #include <stddef.h>
 #include "Corium/Platform/Flash.h"
 #include "GeigerInput/GeigerInput.h"
-#include "Corium/Net/EGHttpPoster.h"
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Net/HttpPoster.h"
+#include "Corium/Prefs/Prefs.h"
 
+// s between uploads, pref settable
 #ifndef RADMON_INTERVAL
 #define RADMON_INTERVAL 60
 #endif
@@ -34,24 +35,32 @@
 #define RADMON_INTERVAL_MIN 30
 #define RADMON_INTERVAL_MAX 1800
 
-const char RADMON_URI[] PROGMEM = "http://radmon.org/radmon.php?function=submit&user=%s&password=%s&value=%s&unit=CPM";
 
-class Radmon : public EGHttpPoster {
+class Radmon : public corium::HttpPoster {
   public:
     Radmon();
     const char* name() override { return PSTR("radmon"); }
-    void on_prefs_loaded() override;
-    const EGPrefGroup* prefs_group() override;
-    uint8_t display_order() override { return 30; }
-    EGLegacyRows legacy_aliases() override;  // LEGACY IMPORT (remove after v1.0.0)
+    void onPrefsLoaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    uint8_t displayOrder() override { return 30; }
+    corium::LegacyRows legacyAliases() override;
     void setInterval(int interval);
     int getInterval();
   protected:
     bool prepare(char* url, size_t cap, const char** body) override;
     bool interpret(const char* reply) override;
-    const char* log_tag() override { return PSTR("Radmon"); }
+    const char* logTag() override { return PSTR("Radmon"); }
   private:
-    uint16_t pingInterval = RADMON_INTERVAL;
+    uint16_t _interval_s = RADMON_INTERVAL;
+    // last sent
+    float _lat = 0, _lon = 0, _ratio = 0;
+    int _warn = -1, _alert = -1;
+    bool _on_due = false;   // alerts on, after warn/alert
+    uint8_t _set = 0;   // the request out is a setting, not a reading
+    bool _read_next = false;   // one setting a slot, its reading next
+    bool loc_due(float* lat, float* lon);
+    int setting(char* url, size_t cap, const char* user, const char* pass);
+    int alerts(char* url, size_t cap, const char* user, const char* pass);
 };
 
 extern Radmon radmon;

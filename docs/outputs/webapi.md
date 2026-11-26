@@ -12,32 +12,40 @@ published: true
 ESPGeiger can optionally contribute its readings to the public map at
 [stations.espgeiger.com](https://stations.espgeiger.com), a global
 radiation-monitoring grid built from community-run Geiger counters.
-Participation is opt-in, signed end-to-end and privacy-respecting.
+Sharing is on by default (CPM readings) and can be turned off at any
+time on the device; every post is signed.
 
 ## What is shared
 
-- **Every minute** (CPM Readings mode only): CPM and µSv/h, plus HV,
-  temperature, humidity and pressure where the hardware has them.
+- **Every minute** (CPM readings mode only): CPM and µSv/h, plus HV,
+  temperature, humidity and pressure where the hardware has them, and
+  the tube health bits while something is wrong.
 - **Every 15 minutes**: a health snapshot of uptime, free memory, loop
-  rate and Wi-Fi signal. Kept short-term only, never added to history.
+  rate, peak tick time, Wi-Fi signal and, on ESP32, the chip temperature. Kept short-term only, never added to history.
 - **Every hour**: a handshake with the device's public key, chip ID,
   firmware version, board and build, tube model and type, compiled-in
-  features, last reset reason, sharing mode and, if you set one, your
+  features, restart reason, sharing mode and, if you set one, your
   location rounded to about 1 km.
+- **After a crash**, the first handshake also carries the crash details
+  to help fix the bug: exception cause, program counter and fault
+  address, a few CPU registers, up to 32 words (128 bytes) from the
+  stack (on ESP8266 the code addresses in it, on ESP32 the backtrace),
+  the kind of reset and the module that was running. No settings,
+  passwords or readings are in it.
 
 Field-level details are in the [WebAPI protocol](/dev/webapi-protocol) developer page.
 
 ## Configuring on the device
 
-The `/webapi` page on each device shows the ESPGeiger Network controls:
+The `/webapi` page on each device shows the ESPGeiger Stations controls:
 
-![ESPGeiger Network config page](/img/espgeiger-network.png)
+![ESPGeiger Stations config page](/img/espgeiger-network.png)
 
 - **Station ID** - assigned by the server on first handshake. Click to view your station on `stations.espgeiger.com`.
-- **Sharing** - tri-state: Off / Heartbeat / CPM Readings (see below).
-- **Latitude / Longitude** - optional. Leave both at `0` to fall back to coarse IP-based geolocation. Coordinates are rounded to 2 decimal places (~1 km resolution) before publication.
-- **Find location** - uses browser geolocation to fill in the lat/lon fields.
+- **Sharing** - tri-state: Off / Heartbeat / CPM readings (see below).
 - **Advanced** - `Reset key` (rotate identity, register as a new station) and `Forget station` (server-side delete; see below).
+
+The station's place on the map comes from the **Location** box on the System tab (Radmon uses it too), where **Find location** fills it in. Leave both at `0` to fall back to coarse IP-based geolocation. Coordinates are rounded to 2 decimal places (~1 km resolution) before publication.
 
 ## Sharing modes
 
@@ -46,7 +54,7 @@ leaves the device:
 
 | Mode | Label | Behaviour |
 |---|---|---|
-| `2` | **CPM Readings** *(default)* | Hourly handshake, per-minute readings, 15-min health snapshots. Your station appears on the map. |
+| `2` | **CPM readings** *(default)* | Hourly handshake, per-minute readings, 15-min health snapshots. Your station appears on the map. |
 | `1` | **Heartbeat**                | Hourly handshake + 15-min health snapshots only. No radiation data leaves the device. Your station appears in fleet-size / uptime stats but not on the map. |
 | `0` | **Off**                      | Nothing sent - no handshake, no posts. |
 
@@ -63,12 +71,13 @@ and your station can't be impersonated.
 
 The `/webapi` page's **Advanced** panel exposes two destructive actions:
 
-- **Reset key** wipes the local private key and reboots. The next
+- **Reset key** wipes the station key and restarts. The next
   handshake registers a fresh station; the old one ages out server-side.
   Use this to migrate to a new identity while still contributing data.
 - **Forget station** sends a signed delete request. The server
   purges the row, all readings and all history, then sharing flips to
-  **Off**. Irreversible - re-enabling later registers as brand new. This
+  **Off**. If the server can't be reached the request is kept, over a
+  restart too, and tried again until the server confirms it. Irreversible - re-enabling later registers as brand new. This
   is the GDPR right-to-erasure path.
 
 ## Map presence
@@ -113,3 +122,7 @@ immediately. Your existing station remains on the map but its
 "last seen" timestamp stops advancing; it falls off the active list
 after the server-side staleness window. Use **Forget station**
 instead if you want the server to actively delete it.
+
+If the server says the station is gone for good, sharing stops until
+you save the `/webapi` settings again or restart the device; the
+console says `WebAPI: Off till a save or restart`.

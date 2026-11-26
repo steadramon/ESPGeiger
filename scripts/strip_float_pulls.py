@@ -1,11 +1,5 @@
-# Drop "-u _printf_float" and "-u _scanf_float" from LINKFLAGS so the linker
-# can dead-code-strip newlib's float printf/scanf chain when nothing references
-# it. Saves ~12 KB on ESP8266 builds with no %f/%g/%e usage.
-#
+# drop -u _printf_float/_scanf_float, ~12 KB on esp8266
 # %f in use still pulls the chain in
-#
-# To re-enable framework default: remove this from extra_scripts in platformio.ini.
-# ESP8266 only; ESP32 doesn't carry these flags.
 
 Import("env")
 

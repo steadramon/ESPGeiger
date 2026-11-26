@@ -20,6 +20,7 @@
 #include "Corium/Logger/Logger.h"
 #include "Corium/System/DeviceInfo.h"
 #include "Corium/System/FastMillis.h"
+#include "Counter/CounterMaths.h"
 #include <EGHttpServer.h>
 
 void GeigerInputTest::appendClicksExtra(EGHttpResponse& res) {
@@ -38,27 +39,29 @@ void set_pulse_width_us(int us) {
 GeigerInputTest::GeigerInputTest() {
 };
 
-// one writer each side, cross core on esp32
+// One writer on each side, they can be on different cores on esp32
 static constexpr uint8_t TP_RING = 64;
-static volatile uint32_t s_tp_at[TP_RING];
-volatile uint8_t GeigerInputTest::_tp_head;
-volatile uint8_t GeigerInputTest::_tp_tail;
+static_assert((256 % TP_RING) == 0, "u8 index wraps, ring must divide 256");
+static uint32_t s_tp_at[TP_RING];   // head's release/acquire orders it
+std::atomic<uint8_t> GeigerInputTest::_tp_head{0};
+std::atomic<uint8_t> GeigerInputTest::_tp_tail{0};
 
-void IRAM_ATTR GeigerInputTest::timerPulse() {
-  uint8_t h = _tp_head;
-  if ((uint8_t)(h - _tp_tail) >= TP_RING) return;   // full, dropped
+void CORIUM_ISR_ATTR GeigerInputTest::timerPulse() {
+  uint8_t h = _tp_head.load(std::memory_order_relaxed);
+  if ((uint8_t)(h - _tp_tail.load(std::memory_order_acquire)) >= TP_RING) return;   // full, dropped
   s_tp_at[h % TP_RING] = micros();
-  _tp_head = h + 1;
+  _tp_head.store(h + 1, std::memory_order_release);
+  post();
 }
 
 void GeigerInputTest::drainTimerPulses() {
-  uint8_t t = _tp_tail;
-  while (t != _tp_head) {
+  uint8_t t = _tp_tail.load(std::memory_order_relaxed);
+  while (t != _tp_head.load(std::memory_order_acquire)) {
     uint32_t at = s_tp_at[t % TP_RING];
     noInterrupts();   // a pin interrupt may count too
     countAt(at);
     interrupts();
-    _tp_tail = ++t;
+    _tp_tail.store(++t, std::memory_order_release);
   }
 }
 
@@ -68,14 +71,14 @@ int GeigerInputTest::collect() {
 }
 
 void GeigerInputTest::begin() {
-  Log::console(PSTR("%s: Setting up test geiger ..."), _test_type);
+  corium::Log::console(PSTR("%s: Setting up test geiger ..."), _test_type);
   GeigerInput::begin();
 }
 
 double GeigerInputTest::generatePoissonRand(double lambda) {
   // https://tomroelandts.com/articles/simulating-a-geiger-counter
   double u;
-  u = (double)DeviceInfo::hwRandom() / ((double)0xFFFFFFFF + 1);
+  u = (double)corium::DeviceInfo::hwRandom() / ((double)0xFFFFFFFF + 1);
   return -log(1 - u) / lambda;
 }
 
@@ -86,7 +89,7 @@ double GeigerInputTest::calcDelay() {
 #ifdef DISABLE_GEIGER_POISSON
   r = mult / cps;
 #else
-  // debt unclamped, keeps it Poisson
+  // The remainder carries over unclamped, which keeps it Poisson
   double interval     = generatePoissonRand(cps) + _remainder;
   double min_interval = (double)_pulse_width_us / 1000000;
   if (interval < min_interval) {
@@ -102,11 +105,12 @@ double GeigerInputTest::calcDelay() {
 }
 
 void GeigerInputTest::setTargetCPM(float target, bool manual = false) {
-  int c = (int)(target * 100 + 0.5f);
-  Log::console(PSTR("%s: Setting CPM to: %d.%02d"), _test_type, c / 100, c % 100);
+  int c = CounterMaths::to_int(target * 100);
+  corium::Log::console(PSTR("%s: Setting CPM to: %d.%02d"), _test_type, c / 100, c % 100);
   _manual = manual;
   setTargetCPS(target/60.0f);
   _retarget = true;
+  post();
 };
 
 void GeigerInputTest::setTargetCPS(float target) {
@@ -130,28 +134,29 @@ void GeigerInputTest::CPMAdjuster() {
     return;
   }
 #ifndef GEIGER_TEST_FIXEDCPM
-  int selection = (fast_millis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
-  if (selection != _current_selection) {
-    _current_selection = selection;
-    int _targetCPM = 30;
+  // 30, 60, 100, 120 cpm in turn
+  int selection = (corium::fastMillis() / GEIGER_TESTPULSE_ADJUSTTIME) % 4;
+  if (selection != _step) {
+    _step = selection;
+    int cpm = 30;
     switch (selection) {
       case 1:
-        _targetCPM = 60;
+        cpm = 60;
         break;
       case 2:
-        _targetCPM = 100;
+        cpm = 100;
         break;
       case 3:
-        _targetCPM = 120;
+        cpm = 120;
         break;
       default:
-        _targetCPM = 30;
+        cpm = 30;
         break;
     }
 #ifdef GEIGER_TEST_FAST
-    _targetCPM = _targetCPM * 100;
+    cpm = cpm * 100;
 #endif
-    setTargetCPM(_targetCPM, false);
+    setTargetCPM(cpm, false);
   }
 #endif
 }

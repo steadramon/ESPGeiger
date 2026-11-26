@@ -1,5 +1,5 @@
 /*
-  Lifecycle.cpp - see header.
+  Lifecycle.cpp - restart and OTA events
 
   Copyright (C) 2026 @steadramon
 
@@ -17,35 +17,52 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "Lifecycle.h"
+#include "FastMillis.h"
 
-volatile bool ota_in_progress = false;
+namespace corium {
+bool otaInProgress = false;
+#ifndef ESP8266
+bool otaHeld = false;
+#endif
 
 namespace Lifecycle {
 
-static constexpr uint8_t MAX_HANDLERS = 6;
+static constexpr uint8_t MAX_HANDLERS = CORIUM_LIFECYCLE_MAX_HANDLERS;
 static Handler s_handlers[MAX_HANDLERS];
 static uint8_t s_count = 0;
 
 bool on(Handler h) {
-  if (!h || s_count >= MAX_HANDLERS) return false;
+  if (!h) return false;
+  for (uint8_t i = 0; i < s_count; i++) {
+    if (s_handlers[i] == h) return true;   // already added by an earlier begin()
+  }
+  if (s_count >= MAX_HANDLERS) return false;
   s_handlers[s_count++] = h;
   return true;
 }
 
+// The only writer of otaInProgress, for web and espota alike
 void send(Event e) {
+  otaInProgress = e == OTA_START;
   for (uint8_t i = 0; i < s_count; i++) s_handlers[i](e);
 }
 
-static volatile uint32_t s_restart_at = 0;   // 0 = none
+static Deadline s_restart;
+static Deadline s_retry;
 
-void request_restart(uint32_t now, uint32_t delay_ms) {
-  uint32_t at = now + delay_ms;
-  s_restart_at = at ? at : 1;
+void requestRestart(uint32_t now, uint32_t delay_ms) {
+  s_restart.set(now + delay_ms);
 }
 
-bool restart_due(uint32_t now) {
-  uint32_t at = s_restart_at;
-  return at != 0 && (int32_t)(now - at) >= 0;
+void retryAfter(uint32_t now, uint32_t delay_ms) {
+  s_retry.set(now + delay_ms);
 }
 
+bool restartDue(uint32_t now) {
+  return s_restart.due(now) || (s_retry.due(now) && !otaInProgress);
 }
+
+bool restartPending() { return s_restart.armed(); }
+
+}
+}  // namespace corium

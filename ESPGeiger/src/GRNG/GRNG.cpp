@@ -16,49 +16,35 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-// keep host-buildable, web stuff in GRNGWeb.cpp
+// Keep this host-buildable, web stuff lives in GRNGWeb.cpp
 
 #include "GRNG.h"
-#include "Corium/Module/EGModule.h"   // EG_XTASK_VOLATILE
 #include "Corium/System/DeviceInfo.h"
+#include "Corium/Util/MathUtil.h"
 #include "sha256.h"
 #include <string.h>
 
-static EG_XTASK_VOLATILE uint32_t s_pool[8] = {0};
+static uint32_t s_pool[8] = {0};
 static uint8_t s_mix_idx = 0;
 
-// own hasher, runs inside uECC_sign
+// Its own hasher, since this can run inside uECC_sign
 static Sha256Class s_sha;
-
-// survives warm reset
-#ifdef NATIVE_TEST
-#  define EG_NOINIT
-#else
-#  define EG_NOINIT __attribute__((section(".noinit")))
-#endif
-
-#ifndef ESP8266
-static uint8_t s_boot_sram[256] EG_NOINIT;
-#endif
 
 GRNG::GRNG() {
 };
 
+// Seeded from RAM left over from before the boot, then the cycle count
 void GRNG::begin() {
   s_sha.init();
-#ifdef ESP8266
-  s_sha.write((const uint8_t*)(0x3FFFC000 - 0x800), 0x800);
-#else
-  s_sha.write(s_boot_sram, sizeof(s_boot_sram));
-#endif
-  uint32_t cc = ESP.getCycleCount();
+  size_t n;
+  const uint8_t* ram = corium::DeviceInfo::bootRam(n);
+  s_sha.write(ram, n);
+  uint32_t cc = corium::DeviceInfo::cycles();
   s_sha.write((const uint8_t*)&cc, sizeof(cc));
   uint8_t* h = s_sha.result();
   for (uint8_t i = 0; i < 8; i++) s_pool[i] ^= ((uint32_t*)h)[i];
-#ifndef ESP8266
-  memcpy(s_boot_sram, h, 32);
-#endif
-  for (uint8_t i = 0; i < 8; i++) mix(DeviceInfo::hwRandom());
+  corium::DeviceInfo::bootRamSet(h, 32);
+  for (uint8_t i = 0; i < 8; i++) mix(corium::DeviceInfo::hwRandom());
   stir();
 }
 
@@ -67,14 +53,14 @@ void GRNG::mix(uint32_t bits) {
 }
 
 uint32_t GRNG::stir() {
-  uint32_t e = DeviceInfo::hwRandom() ^ ESP.getCycleCount();
+  uint32_t e = corium::DeviceInfo::hwRandom() ^ corium::DeviceInfo::cycles();
   mix(e);
   randomSeed(e ^ s_pool[0]);
   return e;
 }
 
 static constexpr uint8_t EXTRACT_HW_WORDS = 4;
-// 55 bytes a block, more costs two
+// One SHA block holds 55 bytes, any more costs two
 static_assert(sizeof(s_pool) + sizeof(uint32_t) + EXTRACT_HW_WORDS * sizeof(uint32_t) <= 55,
               "extract() input past one SHA-256 block");
 
@@ -82,10 +68,10 @@ void GRNG::extract(uint8_t* out, size_t n) {
   while (n > 0) {
     s_sha.init();
     s_sha.write((const uint8_t*)s_pool, sizeof(s_pool));
-    uint32_t cc = ESP.getCycleCount();
+    uint32_t cc = corium::DeviceInfo::cycles();
     s_sha.write((const uint8_t*)&cc, sizeof(cc));
     uint32_t hw[EXTRACT_HW_WORDS];
-    for (uint8_t i = 0; i < EXTRACT_HW_WORDS; i++) hw[i] = DeviceInfo::hwRandom();
+    for (uint8_t i = 0; i < EXTRACT_HW_WORDS; i++) hw[i] = corium::DeviceInfo::hwRandom();
     s_sha.write((const uint8_t*)hw, sizeof(hw));
     uint8_t* h = s_sha.result();
     size_t take = n > 32 ? 32 : n;
@@ -96,16 +82,30 @@ void GRNG::extract(uint8_t* out, size_t n) {
   }
 }
 
-uint32_t GRNG::fast_uint32() {
-  static uint8_t buf[32];
-  static uint8_t pos = sizeof(buf);
-  if (pos >= sizeof(buf)) {
+// No modulo bias, bytes past the last whole multiple of the set length are dropped
+void GRNG::pick(char* out, size_t n, PGM_P set, uint8_t set_len) {
+  const uint16_t top = 256 - 256 % set_len;
+  uint8_t buf[32];
+  while (n > 0) {
     extract(buf, sizeof(buf));
-    pos = 0;
+    for (size_t i = 0; i < sizeof(buf) && n > 0; i++) {
+      if (buf[i] >= top) continue;
+      *out++ = pgm_read_byte(&set[buf[i] % set_len]);
+      n--;
+    }
+  }
+}
+
+uint32_t GRNG::fast_uint32() {
+  static uint8_t s_buf[32];
+  static uint8_t s_pos = sizeof(s_buf);
+  if (s_pos >= sizeof(s_buf)) {
+    extract(s_buf, sizeof(s_buf));
+    s_pos = 0;
   }
   uint32_t r;
-  memcpy(&r, buf + pos, sizeof(r));
-  pos += sizeof(r);
+  memcpy(&r, s_buf + s_pos, sizeof(r));
+  s_pos += sizeof(r);
   return r;
 }
 
@@ -114,9 +114,7 @@ void GRNG::extract_fast(uint8_t* out, size_t n) {
   uint32_t x = s_xs ^ fast_uint32();
   if (x == 0) x = 0x6b8b4567;
   while (n > 0) {
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
+    x = xorshift32(x);
     size_t take = n > 4 ? 4 : n;
     memcpy(out, &x, take);
     out += take;

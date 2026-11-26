@@ -1,5 +1,5 @@
 /*
-  EGHttpHeaders.cpp - see header.
+  EGHttpHeaders.cpp - request header recognisers
 
   Copyright (C) 2026 @steadramon
 
@@ -36,20 +36,27 @@ static const char* skip_spaces(const char* p, const char* end) {
   return p;
 }
 
-// max 8 digits, junk is BAD
+static const size_t CL_DIGITS_MAX = 8;   // under 100 MB, no size_t overflow
+static const char H_CL[] PROGMEM = "Content-Length:";
+
+// junk, a second one or any Transfer-Encoding is BAD
 EGHttpCLResult eghttp_content_length(const char* hdr, size_t headerEnd, size_t* out) {
   *out = 0;
-  const char* p = eghttp_find_header(hdr, headerEnd, PSTR("Content-Length:"));
+  // no chunked bodies here
+  if (eghttp_find_header(hdr, headerEnd, PSTR("Transfer-Encoding:"))) return EGHTTP_CL_BAD;
+  const char* p = eghttp_find_header(hdr, headerEnd, H_CL);
   if (!p) return EGHTTP_CL_ABSENT;
   const char* end = hdr + headerEnd;
   p = skip_spaces(p, end);
   size_t v = 0, nd = 0;
-  while (p < end && *p >= '0' && *p <= '9' && nd < 9) {
-    v = v * 10 + (size_t)(*p - '0');
-    p++; nd++;
+  while (p < end && *p >= '0' && *p <= '9') {
+    if (++nd > CL_DIGITS_MAX) return EGHTTP_CL_BAD;
+    v = v * 10 + (size_t)(*p++ - '0');
   }
   p = skip_spaces(p, end);
-  if (nd == 0 || nd > 8 || p >= end || *p != '\r') return EGHTTP_CL_BAD;
+  if (nd == 0 || p >= end || *p != '\r') return EGHTTP_CL_BAD;
+  // A second Content-Length is BAD even with the same value, like "5, 5" is
+  if (eghttp_find_header(p, (size_t)(end - p), H_CL)) return EGHTTP_CL_BAD;
   *out = v;
   return EGHTTP_CL_OK;
 }

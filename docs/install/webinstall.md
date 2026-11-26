@@ -8,7 +8,7 @@ parent: Install
 
 # Web Installer
 
-The web installer at [https://install.espgeiger.com/](https://install.espgeiger.com/) is the quickest and easiest way to get up and running with ESPGeiger.
+The web installer at [https://install.espgeiger.com/](https://install.espgeiger.com/) is the quickest way to install ESPGeiger.
 
 ![Web Installer](img/webinstall_1.png)
 
@@ -16,14 +16,13 @@ From the Web installer a number of predefined builds can be installed -
 
 ## Pulse
 
-Two pulse builds are made available. The installer auto-picks the right binary for whichever chip family (ESP8266 / ESP32 / ESP32-S3) is connected.
+The installer picks the right binary for the chip family connected (ESP8266 / ESP32 / ESP32-S2 / ESP32-S3 / ESP32-C3).
 
-- **Pulse** - interrupt-based counting on all chip families. Safe default that works regardless of how a tube's pulse is wired.
-- **Pulse - PCNT (ESP32 / ESP32-S3)** - opt-in hardware pulse counter build. Lower CPU overhead, but requires the tube's pulse to be clean enough for the PCNT peripheral to latch reliably. Use this if you are confident in your wiring and want maximum performance; fall back to the standard Pulse build if counts look low or noisy.
+On ESP32, ESP32-S2 and ESP32-S3 the Pulse build carries both counters: Hardware (PCNT, the default) and Interrupt. **Count with** on the Config page's Input tab switches between them without a reflash (restart to apply). If counts look low or noisy on Hardware, try Interrupt. ESP8266 and ESP32-C3 count by interrupt.
 
 ## Serial
 
-A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, or ESPGeiger) from the **Config** page. ESP8266, ESP32 and ESP32-S3 are all detected automatically.
+A single unified serial build supports all serial counter types. After flashing, select your counter type (GC10, GC10Next, MightyOhm, ESPGeiger or Template) from the **Config** page. ESP8266, ESP32, ESP32-S3, ESP32-C3 and ESP32-S2 are all detected automatically.
 
 - Serial
 
@@ -55,7 +54,7 @@ Make sure the relevant drivers are installed for your device. If your device isn
 
 - Select the relevant __Geiger Counter Type__ you wish to install firmware for and where available, if the OLED variant should be used.
 
-- Connect your ESP device to your PC.
+- Connect your ESP device to your PC. An ESP32-S2 goes into download mode by hand for its first flash: hold **0**, tap **RST**, let go of **0**.
 
 - Click __Install__
 
@@ -77,6 +76,8 @@ Make sure the relevant drivers are installed for your device. If your device isn
 
 ![Installing...](img/webinstall_6.png)
 
-- Completed. ESPGeiger is now installed. The indication light on the ESP will be lit permanently until the WiFi hotspot is configured.
+- Completed. ESPGeiger is now installed. The ESPGeiger-XXXXXX network appearing is the sign the install worked.
 
 ![Completed](img/webinstall_7.png)
+
+- To skip the setup portal, use the installer's option to connect to Wi-Fi when it offers it. It sends your network details to the device over USB. This doesn't work on ESPGeiger Log, which uses the serial RX pin for its button; use the setup portal there. Otherwise carry on with [Setup](/install/setup).

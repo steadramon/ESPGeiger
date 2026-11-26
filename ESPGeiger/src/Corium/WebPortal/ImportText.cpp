@@ -19,9 +19,11 @@
 
 #include "ImportText.h"
 #include <string.h>
-#include "Corium/Prefs/EGPrefs.h"
+#include "Corium/Prefs/Prefs.h"
+#include "Corium/Util/Bytes.h"
+#include "Corium/Util/Words.h"
 
-// too long = false
+// false if it's too long
 template <size_t N>
 static bool take(char (&out)[N], const char* p, const char* e) {
   size_t n = e - p;
@@ -31,21 +33,21 @@ static bool take(char (&out)[N], const char* p, const char* e) {
   return true;
 }
 
-// value may hold '=' and '.'
-static bool put_line(const char* p, const char* e, ImportText::PutFn put) {
+// Line is mid.key=value, the value may hold '=' and '.'
+CORIUM_NODISCARD static bool put_line(const char* p, const char* e, corium::ImportText::PutFn put) {
   if (memchr(p, '\0', e - p)) return false;   // a NUL would cut the value
   const char* eq = (const char*)memchr(p, '=', e - p);
   if (!eq) return false;
   const char* dot = (const char*)memchr(p, '.', eq - p);
   if (!dot || dot == p || dot + 1 == eq) return false;
-  char mid[EGPREF_ID_MAX + 1];
-  char key[EGPREF_ID_MAX + 1];
-  char value[EGPREFS_MAX_VALUE + 1];
+  char mid[CORIUM_PREF_ID_MAX + 1];
+  char key[CORIUM_PREF_ID_MAX + 1];
+  char value[CORIUM_PREFS_MAX_VALUE + 1];
   if (!take(mid, p, dot) || !take(key, dot + 1, eq) || !take(value, eq + 1, e)) return false;
   return put(mid, key, value);
 }
 
-static void one_line(const char* p, const char* e, ImportText::PutFn put, ImportText::Result& r,
+static void one_line(const char* p, const char* e, corium::ImportText::PutFn put, corium::ImportText::Result& r,
                      int line) {
   while (p < e && (*p == ' ' || *p == '\t')) p++;
   if (e > p && e[-1] == '\r') e--;
@@ -54,16 +56,18 @@ static void one_line(const char* p, const char* e, ImportText::PutFn put, Import
     r.applied++;
     return;
   }
-  if (!r.skipped) r.first_skip = line;
+  if (!r.skipped) r.firstSkip = line;
   r.skipped++;
 }
 
-bool ImportText::is_blob(const char* text, size_t len) {
-  return len >= 4 && memcmp_P(text, PSTR("ESPG"), 4) == 0;
+const char* corium::ImportText::blobStart(const char* text, size_t len) {
+  const char* end = text + len;
+  while (text < end && (*text == ' ' || *text == '\t' || *text == '\r' || *text == '\n')) text++;
+  return end - text >= 4 && memcmp_P(text, PSTR(CORIUM_EXPORT_MAGIC_B64), 4) == 0 ? text : nullptr;
 }
 
-ImportText::Result ImportText::apply(const char* text, size_t len, PutFn put) {
-  Result r = {0, 0, 0};
+corium::ImportText::Result corium::ImportText::apply(const char* text, size_t len, PutFn put) {
+  Result r = {};
   const char* end = text + len;
   int line = 0;
   while (text < end) {
@@ -75,78 +79,114 @@ ImportText::Result ImportText::apply(const char* text, size_t len, PutFn put) {
   return r;
 }
 
-const char* ImportText::blob_error(const uint8_t* p, size_t len) {
-  if (len < 1) return PSTR("too short");
+const char* corium::ImportText::blobError(const uint8_t* p, size_t len) {
+  if (len < 1) return W_TOO_SHORT;
   size_t off = 0;
   uint8_t gcount = p[off++];
   for (uint8_t gi = 0; gi < gcount; gi++) {
-    if (off + 1 > len) return PSTR("truncated group hdr");
+    if (off + 1 > len) return W_TOO_SHORT;
     uint8_t mid_len = p[off++];
-    if (off + mid_len + 1 > len) return PSTR("bad group hdr");
+    if (off + mid_len + 1 > len) return W_BAD_FORMAT;
     off += mid_len;
     uint8_t pcount = p[off++];
     for (uint8_t pi = 0; pi < pcount; pi++) {
-      if (off + 3 > len) return PSTR("truncated pref");
+      if (off + 3 > len) return W_TOO_SHORT;
       uint8_t klen = p[off++];
-      if (off + klen + 2 > len) return PSTR("bad pref key");
+      if (off + klen + 2 > len) return W_BAD_FORMAT;
       off += klen;
-      uint16_t vlen = ((uint16_t)p[off] << 8) | p[off + 1];
+      uint16_t vlen = rdBe16(p + off);
       off += 2;
-      if (off + vlen > len) return PSTR("truncated pref value");
+      if (off + vlen > len) return W_TOO_SHORT;
       off += vlen;
     }
   }
-  return nullptr;
+  return off == len ? nullptr : W_BAD_FORMAT;
 }
 
-// too long = "", matches no pref
-static void take_id(char (&out)[EGPREF_ID_MAX + 1], const uint8_t* p, uint8_t n) {
-  if (n > EGPREF_ID_MAX) n = 0;
+// Too long gives "", which matches no pref
+static void take_id(char (&out)[CORIUM_PREF_ID_MAX + 1], const uint8_t* p, uint8_t n) {
+  if (n > CORIUM_PREF_ID_MAX) n = 0;
   memcpy(out, p, n);
   out[n] = '\0';
 }
 
 // -1 = not moved
 static int moved_index(const char* mid) {
-  for (size_t i = 0; EGPrefs::moved_from(i); i++) {
-    if (strcmp(EGPrefs::moved_from(i), mid) == 0) return (int)i;
+  for (size_t i = 0; corium::Prefs::movedFrom(i); i++) {
+    if (strcmp(corium::Prefs::movedFrom(i), mid) == 0) return (int)i;
   }
   return -1;
 }
 
-// only the groups whose moved_index is pass
-static int apply_pass(const uint8_t* p, int pass, ImportText::PutFn put) {
+// A NUL would cut the value, same as in put_line
+CORIUM_NODISCARD static bool put_rec(const char* mid, const char* key, const uint8_t* v, uint16_t vlen,
+                    corium::ImportText::PutFn put) {
+  char value[CORIUM_PREFS_MAX_VALUE + 1];
+  if (vlen >= sizeof(value) || memchr(v, '\0', vlen)) return false;
+  memcpy(value, v, vlen);
+  value[vlen] = '\0';
+  return put(mid, key, value);
+}
+
+// only applies the groups whose moved_index is pass
+static void apply_pass(const uint8_t* p, int pass, corium::ImportText::PutFn put,
+                       corium::ImportText::Result& r) {
   size_t off = 0;
   uint8_t gcount = p[off++];
-  int applied = 0;
   for (uint8_t gi = 0; gi < gcount; gi++) {
     uint8_t mid_len = p[off++];
-    char mid[EGPREF_ID_MAX + 1];
+    char mid[CORIUM_PREF_ID_MAX + 1];
     take_id(mid, p + off, mid_len); off += mid_len;
-    bool mine = moved_index(mid) == pass;
+    bool mine = moved_index(mid) == pass && strcmp_P(mid, corium::ImportText::BOARD_MID) != 0;
     uint8_t pcount = p[off++];
     for (uint8_t pi = 0; pi < pcount; pi++) {
       uint8_t klen = p[off++];
-      char key[EGPREF_ID_MAX + 1];
+      char key[CORIUM_PREF_ID_MAX + 1];
       take_id(key, p + off, klen); off += klen;
-      uint16_t vlen = ((uint16_t)p[off] << 8) | p[off + 1];
+      uint16_t vlen = rdBe16(p + off);
       off += 2;
-      char value[EGPREFS_MAX_VALUE + 1];
-      if (!mine || vlen >= sizeof(value)) { off += vlen; continue; }
-      memcpy(value, p + off, vlen); off += vlen;
-      value[vlen] = '\0';
-      if (put(mid, key, value)) applied++;
+      const uint8_t* v = p + off;
+      off += vlen;
+      if (!mine) continue;
+      if (put_rec(mid, key, v, vlen, put)) {
+        r.applied++;
+        continue;
+      }
+      if (!r.skipped) snprintf_P(r.firstKey, sizeof(r.firstKey), W_FMT_DOT, mid, key);
+      r.skipped++;
     }
   }
-  return applied;
 }
 
-// moved groups last listed first, then the rest, as at boot
-int ImportText::apply_blob(const uint8_t* p, size_t len, PutFn put) {
-  if (blob_error(p, len)) return -1;
+const char corium::ImportText::BOARD_MID[] PROGMEM = "board";
+
+void corium::ImportText::blobBoard(const uint8_t* p, size_t len, char* out, size_t cap) {
+  if (!cap) return;
+  out[0] = '\0';
+  size_t off = 1;   // group count
+  if (len < 2 || !p[0]) return;
+  uint8_t mid_len = p[off++];
+  char mid[CORIUM_PREF_ID_MAX + 1];
+  take_id(mid, p + off, mid_len);
+  off += mid_len;
+  if (strcmp_P(mid, BOARD_MID) != 0 || !p[off++]) return;
+  off += 1 + p[off];   // skip the key
+  uint16_t vlen = rdBe16(p + off);
+  off += 2;
+  if (vlen >= cap) return;
+  memcpy(out, p + off, vlen);
+  out[vlen] = '\0';
+}
+
+// Moved groups go first, last listed first, then the rest. Same order as at boot
+corium::ImportText::Result corium::ImportText::applyBlob(const uint8_t* p, size_t len, PutFn put) {
+  Result r = {};
+  if (blobError(p, len)) {
+    r.applied = -1;
+    return r;
+  }
   int n = 0;
-  while (EGPrefs::moved_from(n)) n++;
-  int applied = 0;
-  for (int pass = n - 1; pass >= -1; pass--) applied += apply_pass(p, pass, put);
-  return applied;
+  while (corium::Prefs::movedFrom(n)) n++;
+  for (int pass = n - 1; pass >= -1; pass--) apply_pass(p, pass, put, r);
+  return r;
 }

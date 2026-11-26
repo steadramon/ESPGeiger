@@ -32,5 +32,7 @@ extern const char HTTP_H_CTYPE[] PROGMEM;
 extern const char HTTP_H_UA[] PROGMEM;
 
 extern const char HTTP_CACHE_FOREVER[] PROGMEM;
+extern const char HTTP_HTML_END[] PROGMEM;
+extern const char HTTP_NOT_FOUND[] PROGMEM;
 
 #endif

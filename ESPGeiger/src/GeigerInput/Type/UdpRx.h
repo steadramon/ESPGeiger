@@ -21,6 +21,8 @@
 
 #include "GeigerInput/GeigerInput.h"
 #include "UdpBlip/UdpBlip.h"
+#include "Corium/Util/MathUtil.h"
+#include "Corium/Net/IgmpRefresh.h"
 #include <IPAddress.h>
 
 class WiFiUDP;
@@ -31,19 +33,38 @@ class WiFiUDP;
 #ifndef UDPRX_DEFAULT_PORT
 #define UDPRX_DEFAULT_PORT  UDPBLIP_DEFAULT_PORT
 #endif
+// senders tracked, oldest evicted
 #ifndef UDPRX_PRODUCER_SLOTS
 #define UDPRX_PRODUCER_SLOTS 8
 #endif
+// Max lost clicks waiting to be replayed as blips
 #ifndef UDPRX_GAPFILL_QUEUE
 #define UDPRX_GAPFILL_QUEUE 16
 #endif
-#ifndef UDPRX_POLL_SKIP
-#define UDPRX_POLL_SKIP 500      // loop passes per drain
+#ifndef UDPRX_POLL_MS
+#define UDPRX_POLL_MS 4          // ms per drain, ~500 8266 passes
 #endif
 #ifndef UDPRX_QUIET_MS
 #define UDPRX_QUIET_MS (3 * UDPBLIP_STATS_INTERVAL_MS)   // 3 heartbeats
 #endif
-class GeigerUdpRx : public GeigerInput {
+#ifndef UDPRX_LOG_MAX
+#define UDPRX_LOG_MAX 4          // resync lines a minute
+#endif
+#define UDPRX_DRAIN_MAX 65535    // biggest gap drained, and all pending
+// Allows 2 lost /env, then the third up to half a period late
+#ifndef UDPRX_ENV_TTL_MS
+#define UDPRX_ENV_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
+#endif
+// Loss over the last 10-15 min, 3 windows started 5 min apart
+#ifndef UDPRX_LOSS_STEPS
+#define UDPRX_LOSS_STEPS 3
+#endif
+#define UDPRX_LOSS_STEP_MS 300000UL
+// pin pref and the wire, blank allowed
+#define UDPRX_CHIPID_PAT "[0-9a-fA-F]{" STR(CHIPID_LEN) "}"
+
+// Counts from UdpBlip senders, OSC /espg/<chipid>/click and /env
+class GeigerUdpRx final : public GeigerInput {
 public:
   GeigerUdpRx();
   ~GeigerUdpRx() override;
@@ -53,9 +74,9 @@ public:
   void secondTicker() override;
   int  collect() override;
   bool isHealthy() const override;
-  EGMeasureRows measurements() override;
+  corium::MeasureRows measurements() override;
 
-  void on_prefs_saved();
+  void onPrefsSaved();
 
   struct ProducerRecord {
     char     chipid[BLIP_ID_LEN + 2];   // NUL + pad
@@ -67,86 +88,96 @@ public:
 
   uint8_t producer_count() const { return _producers_seen; }
   const char* locked_chipid() const;
+  enum : uint8_t { RX_ONE, RX_SUM };
   uint8_t mode() const { return _mode; }
+  bool summing() const { return _mode == RX_SUM; }
   IPAddress group() const { return _group; }
   uint16_t  port()  const { return _port; }
 
-  uint32_t packets_accepted() const { return _packets_accepted; }
   uint32_t gap_filled()       const { return _gap_filled; }
   uint32_t resync_count()     const { return _resync_count; }
   uint32_t last_click_ms()    const { return _last_click_ms; }
-  // any message
+  // Any message counts
   uint32_t last_packet_ms()   const { return _last_packet_ms; }
-  uint16_t loss_pct_x10() const {
-    uint32_t total = _local_count;
-    if (total == 0) return 0;
-    uint32_t g = _gap_filled;
-    if (g >= total) return 1000;
-    return (uint16_t)((g * 1000u) / total);
-  }
+  // last 10-15 min, false if nothing came in it
+  bool loss_pct_x10(uint16_t* v) const;
   uint32_t quiet_s() const;   // 0 before the first
   bool heard() const;
-  uint16_t rebind_count() const       { return _rebind_count; }
-  uint16_t refresh_count() const      { return _refresh_count; }
-  uint16_t refresh_noop_count() const { return _refresh_noop_count; }
+  uint32_t rebind_count() const       { return _rebind_count; }
+  uint32_t refresh_count() const      { return _refresh_count; }
+  uint32_t refresh_noop_count() const { return _refresh_noop_count; }
+  // The last /env, i is 0 t, 1 h, 2 p. false once stale
+  bool env(uint8_t i, float* v);
 
 private:
   void readPrefs();
   void teardownUdp();
   bool ensureUdp();
   bool ensureBound(uint32_t now);
-  void climbRecoveryLadder(uint32_t now);
+  void recover(uint32_t now);
   void readDatagrams();
   void fireDueGapfills();
-  bool acceptChipid(const char* src_chipid);
+  void unlatch();
+  bool acceptChipid(const char* src_chipid, bool click);
   void processDatagram(uint8_t* buf, size_t len);
   void processClick(const uint8_t* buf, size_t len, ProducerRecord* p, uint32_t now_ms);
-  uint32_t creditForwardGap(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
-  bool producerRestarted(const ProducerRecord* p, uint32_t producer_counter, uint32_t producer_ts);
+  uint32_t creditForwardGap(const ProducerRecord* p, uint32_t count, uint32_t ts_ms);
+  bool producerRestarted(const ProducerRecord* p, uint32_t count, uint32_t ts_ms);
+  bool logOk();
   void creditClicks(uint32_t credit, uint32_t gap_credit, const ProducerRecord* p,
-                    uint32_t producer_ts, uint32_t now_ms);
+                    uint32_t ts_ms, uint32_t now_ms);
   void scheduleGapfill(uint32_t gap_credit, uint32_t window_ms, uint32_t now_ms);
   void processEnv(const uint8_t* buf, size_t len);
-  ProducerRecord* findOrAllocProducer(const char* chipid, uint32_t now_ms);
+  ProducerRecord* producer(const char* chipid, uint32_t now_ms);
 
   WiFiUDP*  _udp = nullptr;
   IPAddress _group;
   uint16_t  _port = UDPRX_DEFAULT_PORT;
-  uint8_t   _mode = 2;          // 0=pin 1=sum, 2 legacy auto
-  char      _pinned_chipid[BLIP_ID_LEN + 1] = {0};
-  char      _locked_chipid[BLIP_ID_LEN + 1] = {0};
-  char      _env_chipid[BLIP_ID_LEN + 1] = {0};
+  uint8_t   _mode = 2;          // legacy auto
+  char      _pinned_chipid[BLIP_ID_LEN + 1] = {};
+  char      _locked_chipid[BLIP_ID_LEN + 1] = {};
+  char      _env_chipid[BLIP_ID_LEN + 1] = {};
+  float     _env[3] = {NAN, NAN, NAN};
+  corium::Stamp _env_at;
   uint8_t   _rx_mode = 1;       // 0=light 1=modem 2=none
+  corium::IgmpRefresh::Join _joined;   // _group moves first on a change
 
-  volatile uint32_t _local_count = 0;
-  uint32_t _last_seen_count = 0;
-  uint32_t _packets_accepted = 0;
+  uint32_t _local_count = 0;
+  uint32_t _collected = 0;
   uint32_t _gap_filled = 0;
+  struct Start { uint32_t count; uint32_t lost; };
+  Start    _starts[UDPRX_LOSS_STEPS] = {};
+  uint8_t  _oldest = 0;
+  uint32_t _start_at = 0;
   uint32_t _resync_count = 0;
   uint32_t _last_click_ms = 0;
   uint32_t _last_packet_ms = 0;
+  uint32_t _last_packet_s = 0;   // uptime, keeps quiet_s right past the ms wrap
+  corium::Stamp _heard;          // stale stays stale over the wrap
   float _drain_pending = 0.0f;
   float _drain_rate    = 0.0f;
   float _drain_partial = 0.0f;
   bool  _draining      = false;   // int guard
+  bool  _any_packet    = false;
+  uint32_t _log_at = 0;
+  uint8_t  _log_left = UDPRX_LOG_MAX;
 
   ProducerRecord _producers[UDPRX_PRODUCER_SLOTS] = {};
   uint8_t _producers_seen = 0;
   uint32_t _bound_at_ms = 0;
-  unsigned long _last_igmp_refresh_ms = 0;
+  unsigned long _igmp_ms = 0;
 
   void do_refresh();
   unsigned long _recovery_at_ms = 0;   // 0 = idle
-  uint16_t _recovery_steps = 0;
-  uint32_t _ps_bounce_until_ms = 0;    // 0 = idle
+  uint32_t _recovery_steps = 0;
+  corium::Deadline _ps_bounce;
   // Diags
-  uint16_t _rebind_count = 0;
-  uint16_t _refresh_count = 0;
-  uint16_t _refresh_noop_count = 0;    // no netif
+  uint32_t _rebind_count = 0;
+  uint32_t _refresh_count = 0;
+  uint32_t _refresh_noop_count = 0;    // no netif
 
-  uint32_t _gapfill_due_ms[UDPRX_GAPFILL_QUEUE] = {0};
+  uint32_t _gapfill_due_ms[UDPRX_GAPFILL_QUEUE] = {};
   uint8_t  _gapfill_count = 0;
-  uint32_t _gapfill_dropped = 0;
 };
 
 #endif

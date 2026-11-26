@@ -14,24 +14,23 @@
 
 #include <stdint.h>
 #include "Corium/Platform/Flash.h"
-#include "Corium/Module/EGModule.h"
+#include "Corium/Module/Module.h"
 #include "Corium/Output/QuietWindow.h"
 
-class Voice : public EGModule {
+// speak and play calls block on I2S
+class Voice : public corium::Module {
   public:
     Voice() {}
     const char* name() override { return PSTR("voice"); }
-    uint8_t priority() override { return EG_PRIORITY_HARDWARE; }
-    uint8_t display_order() override { return 18; }
-    uint16_t warmup_seconds() override { return 0; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return 1000; }
+    uint8_t priority() override { return CORIUM_PRIORITY_HARDWARE; }
+    uint8_t displayOrder() override { return 18; }
+    static constexpr uint16_t LOOP_MS = 1000;
     void begin() override;
     void loop(unsigned long now) override;
     void registerRoutes(EGHttpServer& http) override;
 
-    const EGPrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
 
     void speakDigit(uint8_t d, bool rising);
     void speakDigits(const char* s);
@@ -44,7 +43,6 @@ class Voice : public EGModule {
     void playKlaxon(uint8_t type);
 
     uint8_t klaxonType()    const { return _klax_type; }
-    uint8_t klaxonVolume()  const { return _klax_vol; }
 
     void announce();
 
@@ -52,19 +50,22 @@ class Voice : public EGModule {
     bool     _klax_en   = false;
     uint8_t  _klax_type = 0;
     uint8_t  _klax_vol  = 55;
-    uint8_t  _klax_cd   = 5;
+    uint8_t  _klax_min  = 5;
     uint8_t  _voice_vol = 80;
     bool     _ann_en    = false;
-    uint16_t _ann_iv    = 60;
+    uint16_t _ann_s     = 60;
     bool     _ann_usv   = false;
     bool     _ann_radmon = false;
+    corium::Sender* _radmon = nullptr;   // nullptr = not built
     bool     _radmon_known  = false;
     bool     _radmon_was_ok = true;
-    unsigned long _radmon_last_attempt = 0;
-    QuietWindow _quiet;
+    unsigned long _radmon_tried = 0;
+    corium::QuietWindow _quiet;
     bool     _prev_alert = false;
     unsigned long _last_klax_ms = 0;
     unsigned long _last_ann_ms  = 0;
+    bool     _klax_wait = false;   // cooldown, cleared in loop()
+    bool     _ann_wait  = false;
     void     queueKlaxonOnAlert();
     void     queueAnnouncement();
     void     queueRadmonChange();

@@ -17,8 +17,8 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef UTIL_WORDS_H
-#define UTIL_WORDS_H
+#ifndef CORIUM_WORDS_H
+#define CORIUM_WORDS_H
 
 #include <Arduino.h>
 
@@ -26,13 +26,30 @@
 extern const char W_OK_TEXT[] PROGMEM;
 extern const char W_TRUE[] PROGMEM;
 extern const char W_FALSE[] PROGMEM;
-extern const char W_APP_NAME[] PROGMEM;
 
 extern const char W_FMT_S[] PROGMEM;
 extern const char W_FMT_D[] PROGMEM;
 extern const char W_FMT_U[] PROGMEM;
+extern const char W_FMT_LU[] PROGMEM;
+extern const char W_FMT_LD[] PROGMEM;
+extern const char W_FMT_DOT[] PROGMEM;
 
 extern const char W_CHECKED[] PROGMEM;
 extern const char W_DETAILS_END[] PROGMEM;
+extern const char W_CONNECTED[] PROGMEM;
+extern const char W_NONE[] PROGMEM;
+extern const char W_ADMIN[] PROGMEM;
+extern const char W_FACTORY_RESET[] PROGMEM;
+extern const char W_UPDATE[] PROGMEM;
+extern const char W_NTP[] PROGMEM;
+extern const char W_BROWSER[] PROGMEM;
+
+// reasons
+extern const char W_REFUSED[] PROGMEM;
+extern const char W_BAD_VALUE[] PROGMEM;
+extern const char W_BAD_FORMAT[] PROGMEM;
+extern const char W_TOO_SHORT[] PROGMEM;
+extern const char W_TOO_LONG[] PROGMEM;
+extern const char W_OOM[] PROGMEM;
 
 #endif

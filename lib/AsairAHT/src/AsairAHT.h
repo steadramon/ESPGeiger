@@ -26,6 +26,7 @@ namespace AsairAHT {
 
 class Sensor {
   public:
+    __attribute__((warn_unused_result))
     bool begin(TwoWire& wire);
 
     // wait >= 80 ms between
@@ -42,6 +43,7 @@ class Sensor {
     static constexpr uint8_t ADDR = 0x38;
 
     bool status(uint8_t& s);
+    __attribute__((warn_unused_result))
     bool sendInit(const uint8_t* seq);
     bool trusted(const uint8_t* buf);
 

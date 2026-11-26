@@ -26,15 +26,16 @@
 #define GEIGER_MODEL "test"
 #endif
 
-class GeigerTest : public GeigerInputTest
+// Timer pulses counted in loop, no pin
+class GeigerTest final : public GeigerInputTest
 {
   public:
     GeigerTest();
-    void begin();
-    void loop();
-    void secondTicker();
+    void begin() override;
+    void loop() override;
+    void secondTicker() override;
     void stopForOTA() override;
     void restartAfterOTA() override;
-    static uint32_t IRAM_ATTR testInterrupt();
+    static uint32_t CORIUM_ISR_ATTR testInterrupt();
 };
 #endif

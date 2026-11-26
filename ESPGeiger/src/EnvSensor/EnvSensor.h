@@ -20,41 +20,46 @@
 #define ENVSENSOR_H
 
 #include <Arduino.h>
-#include "UdpBlip/UdpBlip.h"
 
 #ifndef DISABLE_ENVSENSOR
 #include <BoschTHP.h>
 #include <AsairAHT.h>
-#include "Corium/Module/EGModule.h"
+#include "Corium/Measure/Measure.h"
+#include "Corium/Module/Module.h"
+#include "Corium/System/FastMillis.h"
 #endif
 
+// sample counts are at ENV_SAMPLE_MS
 #define ENV_SAMPLE_MS    10000UL
 #define ENV_EMA_ALPHA     0.1f
 #define ENV_STUCK_SAMPLES 180   // 30 min
 #define ENV_FAIL_SAMPLES  6     // 1 min
 #define ENV_RETRY_MS      60000UL   // max 0xFFFF
-// 2 lost /env, third up to half a period late
-#define ENV_REMOTE_TTL_MS (3 * UDPBLIP_ENV_PERIOD_MS + UDPBLIP_ENV_PERIOD_MS / 2)
+#define ENV_AHT_WAIT_MS   80
+// BME280, BMP280 and AHTxx datasheets
+#define ENV_T_MIN   -40.0f
+#define ENV_T_MAX    85.0f
+#define ENV_H_MIN     0.0f
+#define ENV_H_MAX   100.0f
+#define ENV_P_MIN   300.0f
+#define ENV_P_MAX  1100.0f
 
 #ifndef DISABLE_ENVSENSOR
 
-class EnvSensor : public EGModule {
+class EnvSensor : public corium::Module {
   public:
     enum Unit : uint8_t { UNIT_C = 0, UNIT_F = 1, UNIT_K = 2 };
 
     EnvSensor() {}
     const char* name() override { return PSTR("env"); }
-    uint8_t priority() override { return EG_PRIORITY_DEFAULT; }
-    uint8_t display_order() override { return 13; }   // after Input (12)
-    uint16_t warmup_seconds() override { return 0; }
-    bool has_loop() override { return true; }
-    uint16_t loop_interval_ms() override { return ENV_SAMPLE_MS; }
+    uint8_t priority() override { return CORIUM_PRIORITY_DEFAULT; }
+    uint8_t displayOrder() override { return 13; }   // after Input (12)
     void begin() override;
     void loop(unsigned long now) override;
-    const EGPrefGroup* prefs_group() override;
-    void on_prefs_loaded() override;
-    bool hw_present() override { return present(); }
-    EGMeasureRows measurements() override;
+    const corium::PrefGroup* prefsGroup() override;
+    void onPrefsLoaded() override;
+    bool hwPresent() override { return present(); }
+    corium::MeasureRows measurements() override;
 
     static constexpr uint8_t DRV_BOSCH = 1 << 0;
     static constexpr uint8_t DRV_AHT   = 1 << 1;
@@ -62,15 +67,13 @@ class EnvSensor : public EGModule {
     bool    present() const { return localPresent() || remoteFresh(); }
     bool    localPresent() const { return _drv_flags != 0 && _st != nullptr; }
     const __FlashStringHelper* chipName() const;
-    uint8_t driverFlags() const { return _drv_flags; }
 
-    float tempC() const;
-    float humidity() const;
-    float pressure() const;
-    float tempUser() const;
+    // From the local sensor, else UdpRx's. NAN = none
+    float tempC() const;      // C, offset applied
+    float humidity() const;   // %
+    float pressure() const;   // hPa, sea level once an altitude is set
 
-    // UdpBlip /env, used with no local sensor
-    void setRemote(float t, float h, float p);
+    // used with no local sensor
     bool remoteFresh() const;
 
   private:
@@ -94,25 +97,20 @@ class EnvSensor : public EGModule {
     void emaUpdate(float t, float h, float p);
     bool tryDetect();
 
-    int8_t   _temp_offset_tenths = 0;
+    int8_t   _temp_x10 = 0;
     uint16_t _altitude_m = 0;
     bool     _started = false;
     uint8_t  _drv_flags = 0;
     uint8_t  _detect_tries = 0;
     uint8_t  _phase = PHASE_IDLE;
     // WAIT_AHT only
-    float    _bt = NAN;
-    float    _bh = NAN;
-    float    _bp = NAN;
+    float    _t = NAN;
+    float    _h = NAN;
+    float    _p = NAN;
     bool     _failed = false;
     BoschTHP::Sensor _bosch;
     AsairAHT::Sensor _aht;
     State*   _st = nullptr;
-
-    float    _r_t = NAN;
-    float    _r_h = NAN;
-    float    _r_p = NAN;
-    uint32_t _r_last_ms = 0;
 };
 
 #else  // DISABLE_ENVSENSOR
@@ -127,8 +125,6 @@ class EnvSensor {
     float   tempC() const     { return NAN; }
     float   humidity() const  { return NAN; }
     float   pressure() const  { return NAN; }
-    float   tempUser() const  { return NAN; }
-    void    setRemote(float, float, float) {}
 };
 
 #endif  // DISABLE_ENVSENSOR

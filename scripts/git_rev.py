@@ -1,4 +1,5 @@
 import subprocess
+import time
 
 revision = ""
 try:
@@ -19,5 +20,9 @@ try:
         revision += "-dirty"
 except:
     pass
+
+# no git, built from a zip: the build time, so pages still fetch new scripts
+if not revision:
+    revision = "nogit-" + time.strftime("%y%m%d%H%M")
 
 print("-DGIT_VERSION='\"%s\"'" % revision)
